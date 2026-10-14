@@ -168,15 +168,21 @@ Everything between disable and enable is not checked.
 ctxtruth check [paths...] [options]
 ```
 
-| Option              | Description                                                                     |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `paths...`          | Files or directories to check, relative to the current directory.               |
-| `--format <format>` | `text` (default) or `json`. The JSON report has a versioned schema.             |
-| `--config <path>`   | Use this config file instead of searching the root.                             |
-| `--root <dir>`      | Repository root. Defaults to the current directory.                             |
-| `--fail-on <level>` | `error`, `warning` or `none`. Overrides the config file.                        |
-| `--verbose`         | Also list claims that were `unknown`, with the reason.                          |
-| `--no-color`        | Disable colour. Colour is also off when not a TTY, with `NO_COLOR`, or in JSON. |
+| Option              | Description                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `paths...`          | Files or directories to check, relative to the current directory.                                       |
+| `--format <format>` | `text`, `json`, `sarif`, `markdown` or `agent`. Default `text`, or `agent` when a coding agent runs it. |
+| `--base <ref>`      | Git ref to compare with. Defaults to the pull request base on GitHub Actions.                           |
+| `--new-only`        | Only report findings introduced since the merge base with `--base`.                                     |
+| `--changed-only`    | Only check claims in docs, or about files, changed since `--base` (trades recall).                      |
+| `--output <file>`   | Write the report to a file instead of stdout.                                                           |
+| `--sarif <file>`    | Also write a SARIF report to this file.                                                                 |
+| `--link-base <url>` | URL prefix for file links in the markdown report.                                                       |
+| `--config <path>`   | Use this config file instead of searching the root.                                                     |
+| `--root <dir>`      | Repository root. Defaults to the current directory.                                                     |
+| `--fail-on <level>` | `error`, `warning` or `none`. Overrides the config file.                                                |
+| `--verbose`         | Also list claims that were `unknown`, with the reason.                                                  |
+| `--no-color`        | Disable colour. Colour is also off when not a TTY, with `NO_COLOR`, or in JSON.                         |
 
 `FORCE_COLOR` (anything but `0`) forces colour on.
 
@@ -208,8 +214,8 @@ console.log(formatReport(report, 'text', { color: false, verbose: false }));
 ## Roadmap
 
 - **M1 (done):** paths, scripts and commands checks, text and JSON reports, config.
-- **M2 (current):** symbols, snippets and versions checks.
-- **M3:** GitHub Action, SARIF output, reporting only findings a pull request introduces, `--changed-only`.
+- **M2 (done):** symbols, snippets and versions checks.
+- **M3 (current):** GitHub Action, SARIF output, reporting only findings a pull request introduces, `--changed-only`.
 - **M4:** history engine: `ctxtruth blame` to find the commit that made a claim stale, and the DriftBench dataset.
 - **M5:** opt-in LLM checks with cost tracking, and evals to measure them.
 - **M6:** a study of documentation drift on real repositories.

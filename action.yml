@@ -130,7 +130,7 @@ runs:
       run: |
         # Never fail the job here: fork PRs get a read-only token.
         if ! ids=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments" \
-          --jq '.[] | select(.body | contains("<!-- ctxtruth-report -->")) | .id'); then
+          --jq '.[] | select(.user.type == "Bot" and (.body | contains("<!-- ctxtruth-report -->"))) | .id'); then
           echo "::warning::ctxtruth could not list pull request comments, skipping the comment."
           exit 0
         fi

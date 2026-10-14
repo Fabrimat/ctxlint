@@ -28,6 +28,15 @@ jobs:
 On pull requests the action compares against `origin/<base branch>` and reports only the findings the pull request introduces.
 On other events it checks everything.
 
+## Comparing with the base
+
+With `--new-only` ctxtruth checks the merge base of `--base` and `HEAD` in a temporary git worktree and reports only failures that are new.
+A finding is marked as a code change when its claim passed at the base and its document did not change, so the pull request made an unchanged claim false.
+
+- `fetch-depth: 0` is required: without the base history the run fails with exit code 2 instead of checking less.
+- `--changed-only` only keeps claims in changed documents or about changed files. It is faster to read but trades recall; `--new-only` is the precise mode.
+- Version claims at the base are read from the base npm, pnpm or yarn lockfile. Without one ctxtruth can read, version failures are not comparable and are not reported. Locally, a `node_modules` out of sync with the lockfile can also produce spurious version findings.
+
 ## Inputs
 
 | Input               | Default          | Description                                                                           |
@@ -54,7 +63,7 @@ On other events it checks everything.
 ## The pull request comment
 
 The report starts with a hidden marker line.
-The action looks for an existing comment containing it and edits that one, so a pull request never gets more than one.
+The action looks for an existing comment posted by a bot account that contains it and edits that one, so a pull request never gets more than one.
 If the run is clean and no comment exists yet, nothing is posted; if one exists it is updated to show the clean result.
 The report is also added to the job summary.
 
