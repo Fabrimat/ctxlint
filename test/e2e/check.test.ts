@@ -61,6 +61,41 @@ describe('check() on the drift fixture', () => {
       message: 'Command `tsx` is not installed as a dependency',
     },
     {
+      file: 'AGENTS.md',
+      line: 31,
+      col: 31,
+      checkId: 'symbols',
+      severity: 'warning',
+      message:
+        'Symbol `formatTimeStamp` is not defined in the codebase (did you mean `formatTimestamp`?)',
+      suggestion: 'formatTimestamp',
+    },
+    {
+      file: 'AGENTS.md',
+      line: 32,
+      col: 9,
+      checkId: 'symbols',
+      severity: 'warning',
+      message: '`Config` has no member `reload`',
+    },
+    {
+      file: 'AGENTS.md',
+      line: 33,
+      col: 28,
+      checkId: 'versions',
+      severity: 'warning',
+      message: 'Docs say `zod@3` but `package.json` requires `^4.1.0`',
+      suggestion: 'zod@4',
+    },
+    {
+      file: 'AGENTS.md',
+      line: 38,
+      col: 29,
+      checkId: 'snippets',
+      severity: 'error',
+      message: 'Snippet does not type-check: Expected 1 arguments, but got 2. (TS2554)',
+    },
+    {
       file: 'docs/guide.md',
       line: 5,
       col: 24,
@@ -80,16 +115,16 @@ describe('check() on the drift fixture', () => {
     const { report } = await check({ root: fixture('drift') });
     expect(report.summary).toMatchObject({
       files: 3,
-      claims: 20,
+      claims: 24,
       pass: 10,
-      fail: 7,
+      fail: 11,
       unknown: 3,
-      errors: 5,
-      warnings: 2,
+      errors: 6,
+      warnings: 5,
     });
-    expect(report.summary.freshness).toBeCloseTo(10 / 17);
+    expect(report.summary.freshness).toBeCloseTo(10 / 21);
     expect(report.files.map((f) => [f.file, f.freshness])).toEqual([
-      ['AGENTS.md', 1 / 3],
+      ['AGENTS.md', 3 / 13],
       ['CLAUDE.md', 1],
       ['docs/guide.md', 2 / 3],
     ]);
@@ -120,8 +155,8 @@ describe('check() on the clean fixture', () => {
     expect(report.findings).toEqual([]);
     expect(report.summary).toMatchObject({
       files: 2,
-      claims: 8,
-      pass: 8,
+      claims: 11,
+      pass: 11,
       fail: 0,
       unknown: 0,
       errors: 0,

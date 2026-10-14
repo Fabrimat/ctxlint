@@ -25,3 +25,15 @@ git status
 <!-- ctxtruth-ignore -->
 
 The runner at `src/legacy/runner.ts` was removed in v1.
+
+## API
+
+- Timestamps are rendered by `formatTimeStamp()`.
+- Call `Config.reload()` after editing the config file.
+- Input is validated with `zod@3`.
+
+```ts
+import { formatTimestamp } from './src/utils/formatting.ts';
+
+formatTimestamp(new Date(), 'iso');
+```
