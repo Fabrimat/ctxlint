@@ -33,6 +33,21 @@ It needs Node.js 22.18 or later and reads the repository in the current director
 Inside a git repository it only looks at files git knows about, so ignored build output is never scanned.
 It never writes files.
 
+### GitHub Action
+
+Run it on every pull request, with a comment that reports only the drift the pull request introduces:
+
+<!-- ctxtruth-ignore -->
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- uses: Fabrimat/ctxtruth@main
+```
+
+See the [GitHub Action guide](docs/github-action.md) for permissions, inputs and SARIF upload.
+
 ## Example
 
 This is the real output on the drift fixture used by the test suite, a small pnpm monorepo whose docs went stale:

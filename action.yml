@@ -1,0 +1,159 @@
+name: ctxtruth
+description: Catch drift between your code and the docs coding agents read (AGENTS.md, CLAUDE.md, README, docs/).
+author: Fabrizio La Rosa
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  version:
+    description: npm version of ctxtruth to run.
+    default: latest
+  command:
+    description: Command that runs ctxtruth. Defaults to `npx --yes ctxtruth@<version>`.
+    default: ''
+  args:
+    description: Extra CLI arguments, split on whitespace.
+    default: ''
+  paths:
+    description: Files or directories to check, split on whitespace. Empty checks the default targets.
+    default: ''
+  base:
+    description: Git ref to compare against. Defaults to the pull request base (origin/<base ref>) on pull_request events.
+    default: ''
+  new-only:
+    description: Report only findings introduced since the merge base. Use `true` or `false`; empty means true on pull_request events and when `base` is set.
+    default: ''
+  comment:
+    description: Create or update a pull request comment with the report.
+    default: 'true'
+  sarif:
+    description: Write a SARIF report and upload it to code scanning.
+    default: 'false'
+  fail-on:
+    description: Lowest severity that fails the job, `error`, `warning` or `none`.
+    default: error
+  github-token:
+    description: Token used to write the pull request comment.
+    default: ${{ github.token }}
+  working-directory:
+    description: Directory to run in.
+    default: '.'
+
+outputs:
+  exit-code:
+    description: Exit code of ctxtruth (0 clean, 1 findings, 2 usage or runtime error).
+    value: ${{ steps.run.outputs.exit-code }}
+  report:
+    description: Path of the Markdown report.
+    value: ${{ steps.run.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run ctxtruth
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_PATHS: ${{ inputs.paths }}
+        INPUT_BASE: ${{ inputs.base }}
+        INPUT_NEW_ONLY: ${{ inputs.new-only }}
+        INPUT_SARIF: ${{ inputs.sarif }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_REF: ${{ github.base_ref }}
+        LINK_BASE: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha || github.sha }}
+      run: |
+        report="$RUNNER_TEMP/ctxtruth.md"
+        sarif="$RUNNER_TEMP/ctxtruth.sarif"
+        rm -f "$report" "$sarif"
+
+        if [ -n "$INPUT_COMMAND" ]; then
+          read -r -a cmd <<< "$INPUT_COMMAND"
+        else
+          cmd=(npx --yes "ctxtruth@$INPUT_VERSION")
+        fi
+
+        base="$INPUT_BASE"
+        if [ -z "$base" ] && [ "$EVENT_NAME" = "pull_request" ] && [ -n "$BASE_REF" ]; then
+          base="origin/$BASE_REF"
+        fi
+
+        new_only="$INPUT_NEW_ONLY"
+        if [ -z "$new_only" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ] || [ -n "$INPUT_BASE" ]; then new_only=true; else new_only=false; fi
+        fi
+
+        args=(check)
+        if [ -n "$INPUT_PATHS" ]; then
+          read -r -a paths <<< "$INPUT_PATHS"
+          args+=("${paths[@]}")
+        fi
+        args+=(--format markdown --output "$report" --link-base "$LINK_BASE" --fail-on "$INPUT_FAIL_ON")
+        if [ -n "$base" ]; then args+=(--base "$base"); fi
+        if [ "$new_only" = "true" ]; then args+=(--new-only); fi
+        if [ "$INPUT_SARIF" = "true" ]; then args+=(--sarif "$sarif"); fi
+        if [ -n "$INPUT_ARGS" ]; then
+          read -r -a extra <<< "$INPUT_ARGS"
+          args+=("${extra[@]}")
+        fi
+
+        set +e
+        "${cmd[@]}" "${args[@]}"
+        code=$?
+        set -e
+
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        if [ -f "$report" ]; then
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+          if grep -q 'No documentation drift' "$report"; then clean=true; else clean=false; fi
+          echo "clean=$clean" >> "$GITHUB_OUTPUT"
+          cat "$report" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f "$sarif" ]; then
+          echo "sarif=$sarif" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Update pull request comment
+      if: inputs.comment == 'true' && github.event_name == 'pull_request' && steps.run.outputs.report != '' && steps.run.outputs.exit-code != '2'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPORT: ${{ steps.run.outputs.report }}
+        CLEAN: ${{ steps.run.outputs.clean }}
+      run: |
+        # Never fail the job here: fork PRs get a read-only token.
+        if ! ids=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments" \
+          --jq '.[] | select(.body | contains("<!-- ctxtruth-report -->")) | .id'); then
+          echo "::warning::ctxtruth could not list pull request comments, skipping the comment."
+          exit 0
+        fi
+        id="${ids%%$'\n'*}"
+
+        if [ -n "$id" ]; then
+          gh api -X PATCH "repos/$REPO/issues/comments/$id" -F "body=@$REPORT" > /dev/null \
+            || echo "::warning::ctxtruth could not update its pull request comment (read-only token?)."
+        elif [ "$CLEAN" != "true" ]; then
+          gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -F "body=@$REPORT" > /dev/null \
+            || echo "::warning::ctxtruth could not create a pull request comment (read-only token?)."
+        fi
+
+    - name: Upload SARIF
+      if: always() && steps.run.outputs.sarif != ''
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.run.outputs.sarif }}
+        category: ctxtruth
+
+    - name: Apply exit code
+      shell: bash
+      env:
+        EXIT_CODE: ${{ steps.run.outputs.exit-code }}
+      run: exit "${EXIT_CODE:-2}"
