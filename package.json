@@ -1,0 +1,66 @@
+{
+  "name": "ctxtruth",
+  "version": "0.0.0",
+  "description": "Catch drift between your code and the docs AI agents read (AGENTS.md, CLAUDE.md, README, docs/).",
+  "keywords": [
+    "agents.md",
+    "claude.md",
+    "documentation",
+    "drift",
+    "lint",
+    "ai-agents",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Fabrizio La Rosa",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fabrimat/ctxtruth.git"
+  },
+  "type": "module",
+  "bin": {
+    "ctxtruth": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "packageManager": "pnpm@10.34.5",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dogfood": "node dist/cli.js check"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "mdast-util-from-markdown": "^2.1.0",
+    "mdast-util-gfm": "^3.1.0",
+    "micromark-extension-gfm": "^3.0.0",
+    "semver": "^7.8.5",
+    "typescript": "~6.0.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^22.20.5",
+    "@types/semver": "^7.8.0",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.10",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.4"
+  }
+}
