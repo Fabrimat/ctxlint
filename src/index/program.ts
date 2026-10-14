@@ -4,6 +4,41 @@ import type { RepoIndex } from '../types.js';
 
 export type TS = typeof import('typescript');
 
+const HOST_IO = [
+  'fileExists',
+  'readFile',
+  'directoryExists',
+  'realpath',
+  'getDirectories',
+  'readDirectory',
+] as const;
+
+/**
+ * For a base worktree (`index.depsRoot` set), serve every path under the root that goes through a
+ * `node_modules` segment from the same relative path under `depsRoot`: the worktree has no
+ * installed dependencies. Mutates and returns `host`.
+ */
+export function redirectDeps<T extends object>(host: T, index: RepoIndex): T {
+  if (index.depsRoot === undefined) return host;
+  const from = `${index.root.replaceAll('\\', '/')}/`;
+  const to = `${index.depsRoot.replaceAll('\\', '/')}/`;
+  const map = (p: string): string => {
+    const f = p.replaceAll('\\', '/');
+    // ponytail: case-insensitive prefix test for Windows drive letters; the root is a fresh temp dir.
+    if (!f.toLowerCase().startsWith(from.toLowerCase())) return p;
+    const rel = f.slice(from.length);
+    return rel.split('/').includes('node_modules') ? to + rel : p;
+  };
+  const h = host as Record<string, unknown>;
+  for (const k of HOST_IO) {
+    const fn = h[k];
+    if (typeof fn !== 'function') continue;
+    const orig = fn as (p: string, ...rest: unknown[]) => unknown;
+    h[k] = (p: string, ...rest: unknown[]) => orig.call(host, map(p), ...rest);
+  }
+  return host;
+}
+
 /** Nearest repo-relative `tsconfig.json` walking up from the doc's directory; undefined if none. */
 export function findTsconfig(index: RepoIndex, docDir: string): string | undefined {
   for (let dir = docDir; ; dir = posix.dirname(dir) === '.' ? '' : posix.dirname(dir)) {
@@ -75,7 +110,10 @@ export function compilerOptions(
   const root = index.root.replaceAll('\\', '/');
   let base: CompilerOptions | undefined;
   if (tsconfig !== undefined) {
-    const host = { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => undefined };
+    const host = redirectDeps(
+      { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => undefined },
+      index,
+    );
     base = ts.getParsedCommandLineOfConfigFile(posix.join(root, tsconfig), {}, host)?.options;
   }
   const options: CompilerOptions = base ?? {
@@ -110,10 +148,11 @@ export function compilerOptions(
 export function virtualHost(
   ts: TS,
   options: CompilerOptions,
-  root: string,
+  index: RepoIndex,
   virtual: Map<string, string>,
 ): CompilerHost {
-  const host = ts.createCompilerHost(options);
+  const root = index.root.replaceAll('\\', '/');
+  const host = redirectDeps(ts.createCompilerHost(options), index);
   const { getSourceFile, fileExists, readFile } = host;
   const key = (f: string) => f.replaceAll('\\', '/');
   host.getCurrentDirectory = () => root;

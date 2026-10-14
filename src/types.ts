@@ -103,6 +103,11 @@ export interface RepoIndex {
   root: string;
   files: FileIndex;
   packages: PackageIndex;
+  /**
+   * Absolute root whose `node_modules` serve TypeScript resolution. Set when checking a base
+   * worktree, which has no installed dependencies of its own.
+   */
+  depsRoot?: string;
 }
 
 /* ---------- checks (src/checks/*) ---------- */
@@ -167,8 +172,12 @@ export interface Report {
   };
 }
 
-/** Stable identity of a result across commits: no line numbers, no message text. */
+/**
+ * Stable identity of a result across commits: no line numbers, no message text and no section
+ * (a renamed heading must not make its claims look new). Line endings are normalised because a
+ * checkout can convert them (core.autocrlf).
+ */
 export function fingerprint(r: CheckResult): string {
   const { claim } = r;
-  return [r.checkId, claim.file, claim.kind, claim.value, claim.section.join(' > ')].join('\u0000');
+  return [r.checkId, claim.file, claim.kind, claim.value.replace(/\r\n?/g, '\n')].join('\u0000');
 }

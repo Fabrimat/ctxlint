@@ -119,7 +119,7 @@ export const snippetsCheck: Check = {
 
     for (const [key, items] of groups) {
       const options = compilerOptions(ts, ctx.index, key === '' ? undefined : key);
-      const host = virtualHost(ts, options, root, new Map(items.map((p) => [p.path, p.text])));
+      const host = virtualHost(ts, options, ctx.index, new Map(items.map((p) => [p.path, p.text])));
       const program = ts.createProgram(
         items.map((p) => p.path),
         options,

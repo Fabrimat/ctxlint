@@ -61,6 +61,11 @@ async function verifyIn(
       text(minVersion(found.version)),
     );
   }
+  // A base worktree has no node_modules: without a lockfile we can read, the declared range would
+  // pass claims the head fails on its installed version, faking failures introduced by the change.
+  if (ctx.index.depsRoot !== undefined) {
+    return unknown(claim, 'versions', 'no installed or locked version at the base', files);
+  }
   if (validRange(declared) === null) {
     return unknown(claim, 'versions', 'non-semver specifier', files);
   }
