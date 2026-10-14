@@ -1,7 +1,8 @@
 import { inlinePath } from './paths.js';
+import { packageSpec } from './versions.js';
 
 export interface Extracted {
-  kind: 'path' | 'script' | 'command';
+  kind: 'path' | 'script' | 'command' | 'version';
   value: string;
   /** Offset of the claim text within the parsed line. */
   index: number;
@@ -77,7 +78,8 @@ const KNOWN_BOOLEAN_FLAGS = new Set(
   (
     '--silent -s --if-present --frozen-lockfile -g --global -D -E -O -P -y --yes --ignore-scripts ' +
     '--prod --production --workspaces -ws --include-workspace-root -r --recursive --parallel ' +
-    '--stream --offline --prefer-offline --verbose'
+    '--stream --offline --prefer-offline --verbose --save --save-dev --save-exact --save-optional ' +
+    '--save-peer --dev --exact --optional --peer -S'
   ).split(' '),
 );
 
@@ -136,6 +138,21 @@ function script(
   return [{ kind: 'script', value, index: tok.at, meta: { pm, ...sc.meta, ...extra } }];
 }
 
+const INSTALL_SUBS = new Set(['install', 'i', 'add']);
+
+/**
+ * `pkg@range` arguments of an install command. Global installs are skipped: they are not repo
+ * dependencies. (`dlx`, `npx` and `yarn global add` never reach here.)
+ */
+function installs(sc: Scan, args: Tok[]): Extracted[] {
+  if (args.some((t) => t.text === '-g' || t.text === '--global')) return [];
+  return sc.pos.slice(1).flatMap((tok) => {
+    const spec = packageSpec(tok.text);
+    if (!spec || blocked(sc, tok)) return [];
+    return [{ kind: 'version' as const, value: tok.text, index: tok.at, meta: { ...spec } }];
+  });
+}
+
 const implicitScript = (tok: Tok | undefined): Tok | undefined =>
   tok && !tok.text.includes('/') && !tok.text.startsWith('.') ? tok : undefined;
 
@@ -144,6 +161,7 @@ function npm(args: Tok[]): Extracted[] {
   const [sub, name] = sc.pos;
   if (sub?.text === 'run' || sub?.text === 'run-script') return script('npm', sc, name);
   if (sub?.text === 'test' || sub?.text === 't') return script('npm', sc, sub, {}, 'test');
+  if (sub && INSTALL_SUBS.has(sub.text)) return installs(sc, args);
   // start/stop/restart have npm fallbacks; every other subcommand is not a script.
   return [];
 }
@@ -166,6 +184,7 @@ function pnpm(args: Tok[]): Extracted[] {
   const [sub, name] = sc.pos;
   if (!sub) return [];
   if (sub.text === 'run' || sub.text === 'run-script') return script('pnpm', sc, name);
+  if (INSTALL_SUBS.has(sub.text)) return installs(sc, args);
   if (sub.text === 'exec') {
     return name && !blocked(sc, name)
       ? [{ kind: 'command', value: name.text, index: name.at, meta: { via: 'pnpm-exec' } }]
@@ -188,6 +207,7 @@ function yarn(args: Tok[]): Extracted[] {
   const [sub, a, b, c] = sc.pos;
   if (!sub) return [];
   if (sub.text === 'run') return script('yarn', sc, a);
+  if (sub.text === 'add') return installs(sc, args);
   if (sub.text === 'workspace') {
     if (!a) return [];
     return script('yarn', sc, b?.text === 'run' ? c : b, { filter: a.text });
@@ -199,6 +219,7 @@ function yarn(args: Tok[]): Extracted[] {
 function bun(args: Tok[]): Extracted[] {
   const sc = scan(args, {});
   const [sub, name] = sc.pos;
+  if (sub && INSTALL_SUBS.has(sub.text)) return installs(sc, args);
   if (sub?.text !== 'run' || !name || /[./]/.test(name.text)) return [];
   return script('bun', sc, name);
 }

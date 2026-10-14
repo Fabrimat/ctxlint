@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseMarkdown } from '../../src/parse/index.js';
+import { parseShellLine } from '../../src/parse/shell.js';
 import { claim, fenced } from './helpers.js';
 
 const fromLine = (line: string) =>
@@ -292,6 +293,62 @@ describe('false-positive guards', () => {
         meta: { pm: 'npm' },
         source: 'fence',
       }),
+    ]);
+  });
+});
+
+describe('install version claims', () => {
+  const version = (value: string, pkg: string, range: string) => ({
+    kind: 'version',
+    value,
+    meta: { pkg, range },
+  });
+
+  it.each([
+    ['npm install zod@3', [version('zod@3', 'zod', '3')]],
+    [
+      'npm i zod@^3.22 @types/node@22',
+      [version('zod@^3.22', 'zod', '^3.22'), version('@types/node@22', '@types/node', '22')],
+    ],
+    ['npm add -D zod@3.22.4', [version('zod@3.22.4', 'zod', '3.22.4')]],
+    ['npm install --save-dev zod@3', [version('zod@3', 'zod', '3')]],
+    ['pnpm add zod@3', [version('zod@3', 'zod', '3')]],
+    ['pnpm add -F web react@18.x', [version('react@18.x', 'react', '18.x')]],
+    ['pnpm install zod@3', [version('zod@3', 'zod', '3')]],
+    [
+      'pnpm i zod@3 && yarn add react@18',
+      [version('zod@3', 'zod', '3'), version('react@18', 'react', '18')],
+    ],
+    ['yarn add zod@3', [version('zod@3', 'zod', '3')]],
+    ['bun add zod@3', [version('zod@3', 'zod', '3')]],
+    ['bun install zod@3', [version('zod@3', 'zod', '3')]],
+    ['npm install zod', []],
+    ['npm install zod@latest', []],
+    ['npm install node@22', []],
+    ['npm install -g zod@3', []],
+    ['npm install zod@3 --global', []],
+    ['pnpm add -g zod@3', []],
+    ['pnpm add --global zod@3', []],
+    ['yarn global add zod@3', []],
+    ['bun add -g zod@3', []],
+    ['pnpm dlx zod@3', []],
+    ['yarn dlx zod@3', []],
+    ['npm exec zod@3', []],
+    ['bunx zod@3', []],
+  ])('%s', (line, expected) => {
+    expect(fromLine(line).filter((c) => c.kind === 'version')).toEqual(expected);
+  });
+
+  it('npx keeps its command claim and yields no version', () => {
+    expect(fromLine('npx zod@3')).toEqual([command('zod', { via: 'npx' })]);
+  });
+
+  it('reports the index of each package argument', () => {
+    const line = 'pnpm add zod@3 react@18';
+    const claims = parseShellLine(line);
+    expect(claims.map((c) => line.slice(c.index, c.index + c.value.length))).toEqual([
+      'zod@3',
+      'react@18',
     ]);
   });
 });

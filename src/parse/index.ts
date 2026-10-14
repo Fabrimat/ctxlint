@@ -6,6 +6,8 @@ import type { Claim, ClaimKind, ClaimSource } from '../types.js';
 import { disabledRanges, isDisabled, markerOf, type Toggle } from './markers.js';
 import { inlinePath, linkPath, proseTokens, type PathParts } from './paths.js';
 import { logicalLines, parseShellLine, type Piece } from './shell.js';
+import { inlineSymbol } from './symbols.js';
+import { inlineVersion } from './versions.js';
 
 export interface ParseOptions {
   /** Also extract paths mentioned in plain prose (noisier; off by default). */
@@ -19,6 +21,7 @@ interface Pos {
 
 const FENCE_LANGS = new Set(['sh', 'bash', 'shell', 'zsh', 'console', 'shellsession']);
 const CONSOLE_LANGS = new Set(['console', 'shellsession']);
+const SNIPPET_LANGS = new Set(['ts', 'typescript', 'tsx', 'mts', 'cts']);
 const PACKAGE_MANAGER_COMMAND = /^(?:npm|pnpm|yarn|bun|npx)(?=\s|$)/;
 const FRONTMATTER = /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
@@ -87,13 +90,29 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
       return;
     }
     const parts = inlinePath(code);
-    if (parts) addPath(parts, posAt(base), 'inline-code');
+    if (parts) return addPath(parts, posAt(base), 'inline-code');
+    const version = inlineVersion(code);
+    if (version) return add('version', version.value, posAt(base), 'inline-code', version.meta);
+    const symbol = inlineSymbol(code);
+    if (symbol) add('symbol', symbol.value, posAt(base), 'inline-code', symbol.meta);
+  }
+
+  function snippet(node: Code, lang: string, first: number): void {
+    const raw = lines[first] ?? '';
+    const [head = ''] = node.value.split(/\r?\n/);
+    const indent = raw.endsWith(head) ? raw.length - head.length : 0;
+    add('snippet', node.value, { line: first + 1, col: indent + 1 }, 'fence', {
+      lang,
+      ...(node.meta ? { info: node.meta } : {}),
+    });
   }
 
   function fence(node: Code): void {
     const lang = node.lang?.toLowerCase();
     const first = node.position?.start.line;
-    if (!lang || !FENCE_LANGS.has(lang) || first === undefined) return;
+    if (!lang || first === undefined) return;
+    if (SNIPPET_LANGS.has(lang)) return snippet(node, lang, first);
+    if (!FENCE_LANGS.has(lang)) return;
     const pieces: Piece[] = node.value.split(/\r?\n/).map((text, i) => {
       const raw = lines[first + i] ?? '';
       const indent = raw.endsWith(text) ? raw.length - text.length : 0;
