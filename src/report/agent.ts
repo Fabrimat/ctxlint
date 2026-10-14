@@ -56,8 +56,11 @@ export function formatAgent(report: Report, opts: FormatOptions): string {
   }
 
   if (findings.length > 0) {
+    const how = findings.some((f) => f.suggestion !== undefined)
+      ? 'using the → replacements'
+      : 'so they match the repository';
     out.push(
-      'To fix: edit the docs at the positions above using the → replacements; re-run `ctxtruth check` to confirm.',
+      `To fix: edit the docs at the positions above ${how}; re-run \`ctxtruth check\` to confirm.`,
     );
   }
   return `${out.join('\n')}\n`;

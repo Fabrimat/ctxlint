@@ -31,8 +31,8 @@ const SOURCES: Record<string, string> = {
   ].join('\n'),
 };
 
-let cleanup = (): void => undefined;
-afterEach(() => cleanup());
+const cleanups: (() => void)[] = [];
+afterEach(() => cleanups.splice(0).forEach((c) => c()));
 beforeEach(() => {
   loads.n = 0;
 });
@@ -44,7 +44,7 @@ async function run(
   sources: Record<string, string> = SOURCES,
 ) {
   const repo = makeTmpRepo(sources);
-  cleanup = repo.cleanup;
+  cleanups.push(repo.cleanup);
   const index = makeIndex({ files: Object.keys(sources), root: repo.dir });
   const claim: Claim = makeClaim({ kind: 'symbol', value, ...(meta ? { meta } : {}) });
   const [res] = await symbolsCheck.run([claim], makeCtx(index, severity));

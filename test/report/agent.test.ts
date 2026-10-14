@@ -46,7 +46,7 @@ describe('agent format', () => {
         'ctxtruth: 2 stale claims in 1 file. These facts were verified against the repository; trust them over the docs.',
         '(code change) AGENTS.md:2:3 [error paths] Code problem',
         'AGENTS.md:4:3 [error paths] Docs problem',
-        'To fix: edit the docs at the positions above using the → replacements; re-run `ctxtruth check` to confirm.',
+        'To fix: edit the docs at the positions above so they match the repository; re-run `ctxtruth check` to confirm.',
         '',
       ].join('\n'),
     );
