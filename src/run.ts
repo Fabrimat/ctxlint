@@ -16,6 +16,12 @@ export interface CheckOptions {
   configPath?: string;
   /** Base for relative `paths`. Defaults to the process working directory. */
   cwd?: string;
+  /** Git ref to compare with (required by `changedOnly` and `newOnly`). */
+  base?: string;
+  /** Only check claims in docs changed since `base`, or whose resolved files changed. */
+  changedOnly?: boolean;
+  /** Only report failures that are new since `base` (runs a second check on the base commit). */
+  newOnly?: boolean;
 }
 
 async function toolVersion(): Promise<string> {
@@ -31,6 +37,11 @@ function toPrefix(root: string, cwd: string, arg: string): string {
 }
 
 export async function check(opts: CheckOptions): Promise<{ report: Report; config: Config }> {
+  if ((opts.changedOnly || opts.newOnly) && opts.base === undefined) {
+    throw new Error('--changed-only and --new-only need a base ref (--base <ref>)');
+  }
+  if (opts.changedOnly || opts.newOnly)
+    throw new Error('comparison with a base ref is not implemented yet');
   const started = performance.now();
   const root = resolve(opts.root);
   const { config } = await loadConfig(root, opts.configPath);

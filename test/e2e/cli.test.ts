@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { main, type CliIO } from '../../src/cli.js';
 import { check } from '../../src/run.js';
@@ -190,6 +191,57 @@ describe('ctxtruth check', () => {
       const json = await run([...args, '--format', 'json'], { env: { FORCE_COLOR: '1' } });
       expect(json.out).not.toContain(ESC);
     });
+  });
+
+  describe('format selection', () => {
+    it('defaults to the agent format when a coding agent runs the command', async () => {
+      const { out } = await run(['check', '--root', drift], { env: { CLAUDECODE: '1' } });
+      expect(out).toMatch(/^ctxtruth: 11 stale claims in 2 files./);
+    });
+
+    it('lets CTXTRUTH_FORMAT and --format override the default', async () => {
+      const env = { CLAUDECODE: '1', CTXTRUTH_FORMAT: 'json' };
+      expect(JSON.parse((await run(['check', '--root', clean], { env })).out)).toMatchObject({
+        version: 1,
+      });
+      const text = await run(['check', '--root', clean, '--format', 'text'], { env });
+      expect(text.out).toMatch(/^✔ No drift found/);
+    });
+  });
+
+  describe('output files', () => {
+    let cleanup = () => {};
+    afterEach(() => cleanup());
+
+    it('--output writes the report to a file and --sarif adds a SARIF file', async () => {
+      const repo = makeTmpRepo({});
+      cleanup = repo.cleanup;
+      const out = join(repo.dir, 'report.md');
+      const sarif = join(repo.dir, 'report.sarif');
+      const res = await run([
+        'check',
+        '--root',
+        drift,
+        '--format',
+        'markdown',
+        '--output',
+        out,
+        '--sarif',
+        sarif,
+      ]);
+      expect(res.code).toBe(1);
+      expect(res.out).toBe('');
+      expect(readFileSync(out, 'utf8').startsWith('<!-- ctxtruth-report -->')).toBe(true);
+      expect(JSON.parse(readFileSync(sarif, 'utf8'))).toMatchObject({ version: '2.1.0' });
+    });
+  });
+
+  it('exits 2 when --changed-only or --new-only has no base ref', async () => {
+    for (const flag of ['--changed-only', '--new-only']) {
+      const { code, err } = await run(['check', '--root', drift, flag]);
+      expect(code).toBe(2);
+      expect(err).toContain('--base <ref>');
+    }
   });
 
   it('--help and --version exit 0', async () => {

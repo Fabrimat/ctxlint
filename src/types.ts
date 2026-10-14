@@ -39,9 +39,21 @@ export interface Finding {
   message: string;
   /** Concrete replacement text when one is obvious (e.g. the renamed path). */
   suggestion?: string;
+  /**
+   * Set when the run is compared with a base ref: `docs` when the doc file changed since the base,
+   * `code` when only the code did (the change made an unchanged claim false).
+   */
+  introducedBy?: 'docs' | 'code';
 }
 
 export type CheckStatus = 'pass' | 'fail' | 'unknown';
+
+/**
+ * How a failing result relates to the base ref (only with `--new-only`): `new` failures are
+ * reported, `existing` ones (already failing at the base) and `not-comparable` ones (unknown at
+ * the base) are kept in the report but not shown or counted as findings.
+ */
+export type Baseline = 'new' | 'existing' | 'not-comparable';
 
 export interface CheckResult {
   claim: Claim;
@@ -53,6 +65,8 @@ export interface CheckResult {
   finding?: Finding;
   /** Repo-relative code files this claim depends on (used by --changed-only and LLM scoping). */
   resolvedFiles: string[];
+  /** Set on failing results when the run is compared with a base ref. */
+  baseline?: Baseline;
 }
 
 /* ---------- repo index (built by src/index) ---------- */
@@ -115,13 +129,30 @@ export interface FileReport {
   results: CheckResult[];
 }
 
+/** Present when the run was compared with a base ref. */
+export interface Comparison {
+  /** The base ref as given (e.g. `origin/main`). */
+  base: string;
+  /** The commit the base ref resolved to (the merge base with HEAD). */
+  baseSha: string;
+  /** Failing results that are new since the base. */
+  introduced: number;
+  /** Failing results that already failed at the base. */
+  existing: number;
+  /** Results that failed at the base and pass now. */
+  fixed: number;
+  /** Failing results whose claim was unknown at the base. */
+  notComparable: number;
+}
+
 export interface Report {
   /** JSON schema version of this report shape. */
   version: 1;
   tool: { name: string; version: string };
   files: FileReport[];
-  /** Every finding, sorted by file, line, col. */
+  /** Every reported finding (failing results whose baseline is unset or `new`), sorted by file, line, col. */
   findings: Finding[];
+  comparison?: Comparison;
   summary: {
     files: number;
     claims: number;

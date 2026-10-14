@@ -1,5 +1,6 @@
 import { styleText } from 'node:util';
 import type { FileReport, Finding, Report } from '../types.js';
+import { isReported } from './build.js';
 
 type Style = Parameters<typeof styleText>[0];
 
@@ -34,7 +35,7 @@ function fileRows(file: FileReport, verbose: boolean): Row[] {
   const rows: Row[] = [];
   for (const r of file.results) {
     const { line, col, kind, value } = r.claim;
-    if (r.status === 'fail' && r.finding) {
+    if (isReported(r) && r.finding) {
       rows.push(findingRow(r.finding));
     } else if (r.status === 'unknown' && verbose) {
       const reason = r.reason ?? 'could not be verified';

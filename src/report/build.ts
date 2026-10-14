@@ -8,6 +8,21 @@ const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const countStatus = (rs: CheckResult[], s: CheckResult['status']): number =>
   rs.filter((r) => r.status === s).length;
 
+/** True for failing results that are reported: all of them, or only new ones after a comparison. */
+export const isReported = (r: CheckResult): boolean =>
+  r.status === 'fail' && r.finding !== undefined && (r.baseline ?? 'new') === 'new';
+
+/** Reported failing results in finding order (file, line, col, check). */
+export function reportedResults(report: Report): CheckResult[] {
+  const order = new Map(report.findings.map((f, i) => [f, i]));
+  return report.files
+    .flatMap((f) => f.results)
+    .filter(isReported)
+    .sort(
+      (a, b) => (order.get(a.finding as Finding) ?? 0) - (order.get(b.finding as Finding) ?? 0),
+    );
+}
+
 export function buildReport(
   results: CheckResult[],
   docFiles: string[],
@@ -29,7 +44,7 @@ export function buildReport(
     }));
 
   const findings = results
-    .flatMap((r) => (r.status === 'fail' && r.finding ? [r.finding] : []))
+    .flatMap((r) => (isReported(r) && r.finding ? [r.finding] : []))
     .sort(
       (a: Finding, b: Finding) =>
         cmp(a.file, b.file) || a.line - b.line || a.col - b.col || cmp(a.checkId, b.checkId),
