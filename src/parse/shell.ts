@@ -1,0 +1,364 @@
+import { inlinePath } from './paths.js';
+
+export interface Extracted {
+  kind: 'path' | 'script' | 'command';
+  value: string;
+  /** Offset of the claim text within the parsed line. */
+  index: number;
+  meta?: Record<string, string>;
+}
+
+interface Tok {
+  text: string;
+  at: number;
+  op: boolean;
+}
+
+const OPERATORS = ['&&', '||', ';', '|'];
+const startsOperator = (s: string, i: number): string | undefined =>
+  OPERATORS.find((o) => s.startsWith(o, i));
+
+/** Minimal shell tokenizer: quotes, backslash escapes, `#` comments and command separators. */
+function tokenize(line: string): Tok[] {
+  const toks: Tok[] = [];
+  let i = 0;
+  while (i < line.length) {
+    const c = line.charAt(i);
+    if (/\s/.test(c)) {
+      i++;
+      continue;
+    }
+    if (c === '#') break;
+    const op = startsOperator(line, i);
+    if (op) {
+      toks.push({ text: op, at: i, op: true });
+      i += op.length;
+      continue;
+    }
+    const at = i;
+    let text = '';
+    while (i < line.length && !/\s/.test(line.charAt(i)) && !startsOperator(line, i)) {
+      const ch = line.charAt(i);
+      if (ch === "'") {
+        const end = line.indexOf("'", i + 1);
+        const stop = end < 0 ? line.length : end;
+        text += line.slice(i + 1, stop);
+        i = stop + 1;
+      } else if (ch === '"') {
+        i++;
+        while (i < line.length && line.charAt(i) !== '"') {
+          if (line.charAt(i) === '\\' && i + 1 < line.length) i++;
+          text += line.charAt(i++);
+        }
+        i++;
+      } else if (ch === '\\') {
+        text += line.charAt(i + 1);
+        i += 2;
+      } else {
+        text += ch;
+        i++;
+      }
+    }
+    toks.push({ text, at, op: false });
+  }
+  return toks;
+}
+
+function splitCommands(toks: Tok[]): Tok[][] {
+  const cmds: Tok[][] = [[]];
+  for (const t of toks) {
+    if (t.op) cmds.push([]);
+    else cmds[cmds.length - 1]?.push(t);
+  }
+  return cmds.filter((c) => c.length > 0);
+}
+
+const KNOWN_BOOLEAN_FLAGS = new Set(
+  (
+    '--silent -s --if-present --frozen-lockfile -g --global -D -E -O -P -y --yes --ignore-scripts ' +
+    '--prod --production --workspaces -ws --include-workspace-root -r --recursive --parallel ' +
+    '--stream --offline --prefer-offline --verbose'
+  ).split(' '),
+);
+
+interface Scan {
+  pos: Tok[];
+  meta: Record<string, string>;
+  /** For each unrecognised flag, how many positionals preceded it. */
+  unknown: number[];
+}
+
+/** Splits flags from positionals; stops at `--`. */
+function scan(
+  args: Tok[],
+  valued: Record<string, string>,
+  bool: Record<string, string> = {},
+): Scan {
+  const out: Scan = { pos: [], meta: {}, unknown: [] };
+  for (let i = 0; i < args.length; i++) {
+    const tok = args[i];
+    if (!tok || tok.text === '--') break;
+    if (!tok.text.startsWith('-')) {
+      out.pos.push(tok);
+      continue;
+    }
+    const eq = tok.text.indexOf('=');
+    const name = eq > 0 ? tok.text.slice(0, eq) : tok.text;
+    if (Object.hasOwn(bool, name)) out.meta[bool[name] as string] = 'true';
+    else if (Object.hasOwn(valued, name)) {
+      const value = eq > 0 ? tok.text.slice(eq + 1) : args[++i]?.text;
+      if (value) out.meta[valued[name] as string] = value;
+    } else if (eq < 0 && !KNOWN_BOOLEAN_FLAGS.has(name) && !name.startsWith('--no-')) {
+      // May take a value we cannot see, which would shift the positionals: drop the claim.
+      out.unknown.push(out.pos.length);
+    }
+  }
+  return out;
+}
+
+/** True when an unrecognised flag precedes the claim token, so its position is unreliable. */
+const blocked = (sc: Scan, tok: Tok): boolean => {
+  const idx = sc.pos.indexOf(tok);
+  return sc.unknown.some((n) => n <= idx);
+};
+
+/** `<script>`, `{name}`, `$SCRIPT`, `[cmd]`, `...`: documentation placeholders, not names. */
+const PLACEHOLDER = /[<>{}[\]$]|\.\.\./;
+
+function script(
+  pm: string,
+  sc: Scan,
+  tok: Tok | undefined,
+  extra: Record<string, string> = {},
+  value = tok?.text,
+): Extracted[] {
+  if (!tok || !value || PLACEHOLDER.test(value) || blocked(sc, tok)) return [];
+  return [{ kind: 'script', value, index: tok.at, meta: { pm, ...sc.meta, ...extra } }];
+}
+
+const implicitScript = (tok: Tok | undefined): Tok | undefined =>
+  tok && !tok.text.includes('/') && !tok.text.startsWith('.') ? tok : undefined;
+
+function npm(args: Tok[]): Extracted[] {
+  const sc = scan(args, { '-w': 'filter', '--workspace': 'filter' });
+  const [sub, name] = sc.pos;
+  if (sub?.text === 'run' || sub?.text === 'run-script') return script('npm', sc, name);
+  if (sub?.text === 'test' || sub?.text === 't') return script('npm', sc, sub, {}, 'test');
+  // start/stop/restart have npm fallbacks; every other subcommand is not a script.
+  return [];
+}
+
+const PNPM_BUILTINS = new Set(
+  (
+    'add i install update up upgrade remove rm uninstall un link ln unlink import rebuild rb prune ' +
+    'fetch patch patch-commit patch-remove audit outdated list ls ll why licenses exec dlx create init ' +
+    'publish pack setup env store config c get set root bin help server deploy doctor cache self-update ' +
+    'approve-builds ignored-builds catalog'
+  ).split(' '),
+);
+
+function pnpm(args: Tok[]): Extracted[] {
+  const sc = scan(
+    args,
+    { '-F': 'filter', '--filter': 'filter', '-C': 'dir', '--dir': 'dir' },
+    { '-r': 'recursive', '--recursive': 'recursive' },
+  );
+  const [sub, name] = sc.pos;
+  if (!sub) return [];
+  if (sub.text === 'run' || sub.text === 'run-script') return script('pnpm', sc, name);
+  if (sub.text === 'exec') {
+    return name && !blocked(sc, name)
+      ? [{ kind: 'command', value: name.text, index: name.at, meta: { via: 'pnpm-exec' } }]
+      : [];
+  }
+  if (PNPM_BUILTINS.has(sub.text)) return [];
+  return script('pnpm', sc, implicitScript(sub));
+}
+
+const YARN_BUILTINS = new Set(
+  (
+    'add install remove up upgrade why info init config cache dlx exec node workspaces set plugin ' +
+    'version npm pack publish login logout link unlink constraints explain bin patch patch-commit ' +
+    'rebuild search stage unplug global create import'
+  ).split(' '),
+);
+
+function yarn(args: Tok[]): Extracted[] {
+  const sc = scan(args, {});
+  const [sub, a, b, c] = sc.pos;
+  if (!sub) return [];
+  if (sub.text === 'run') return script('yarn', sc, a);
+  if (sub.text === 'workspace') {
+    if (!a) return [];
+    return script('yarn', sc, b?.text === 'run' ? c : b, { filter: a.text });
+  }
+  if (YARN_BUILTINS.has(sub.text)) return [];
+  return script('yarn', sc, implicitScript(sub));
+}
+
+function bun(args: Tok[]): Extracted[] {
+  const sc = scan(args, {});
+  const [sub, name] = sc.pos;
+  if (sub?.text !== 'run' || !name || /[./]/.test(name.text)) return [];
+  return script('bun', sc, name);
+}
+
+function npx(args: Tok[]): Extracted[] {
+  const sc = scan(args, { '-p': 'package', '--package': 'package' });
+  const bin = sc.pos[0];
+  if (!bin || blocked(sc, bin)) return [];
+  // `@scope/pkg@1` and `pkg@1` lose the version; a lone leading `@` is the scope.
+  const cut = bin.text.lastIndexOf('@');
+  const value = cut > 0 ? bin.text.slice(0, cut) : bin.text;
+  return [{ kind: 'command', value, index: bin.at, meta: { via: 'npx' } }];
+}
+
+const ENV_ASSIGNMENT = /^[A-Za-z_]\w*=/;
+const BINARY_NAME = /^[A-Za-z0-9_][\w.+-]*$/;
+const WRAPPERS = new Set(['sudo', 'then', 'do', 'else', 'time']);
+const NOT_COMMANDS = new Set(
+  (
+    'if then else elif fi for while until do done case esac in function export set unset source . ' +
+    'alias echo printf read exit return eval exec test [ [[ ] ]] { } ( ) time trap shift wait ' +
+    'local declare'
+  ).split(' '),
+);
+
+/** Removes subshell/group punctuation hugging the command: `(cd x` ... `y)`. */
+function trimGroup(cmd: Tok[]): Tok[] {
+  const toks = cmd.map((t) => ({ ...t }));
+  const head = toks[0];
+  if (head) {
+    const bare = head.text.replace(/^[({]+/, '');
+    head.at += head.text.length - bare.length;
+    head.text = bare;
+    if (!bare) toks.shift();
+  }
+  const tail = toks.at(-1);
+  if (tail) {
+    tail.text = tail.text.replace(/[)};]+$/, '');
+    if (!tail.text) toks.pop();
+  }
+  return toks;
+}
+
+function classify(raw: Tok[]): Extracted[] {
+  const cmd = trimGroup(raw);
+  let k = 0;
+  while (
+    k < cmd.length &&
+    (ENV_ASSIGNMENT.test(cmd[k]?.text ?? '') || WRAPPERS.has(cmd[k]?.text ?? ''))
+  )
+    k++;
+  const [first, ...rest] = cmd.slice(k);
+  if (!first) return [];
+  // `npm.cmd`, `bun.exe`: Windows launchers; a path such as ./run.ps1 keeps its extension.
+  const name = first.text.includes('/')
+    ? first.text
+    : first.text.replace(/\.(?:cmd|exe|ps1)$/i, '');
+  if (NOT_COMMANDS.has(name) || name === 'cd') return [];
+  switch (name) {
+    case 'npm':
+      return npm(rest);
+    case 'pnpm':
+      return pnpm(rest);
+    case 'yarn':
+      return yarn(rest);
+    case 'bun':
+      return bun(rest);
+    case 'npx':
+      return npx(rest);
+  }
+  if (name.includes('/')) {
+    // Only relative paths; absolute, `~` and `$VAR` forms are rejected here or by inlinePath.
+    const parts = name.startsWith('/') ? null : inlinePath(name);
+    return parts ? [{ kind: 'path', ...parts, index: first.at }] : [];
+  }
+  return BINARY_NAME.test(name) ? [{ kind: 'command', value: name, index: first.at }] : [];
+}
+
+/** Extracts script, command and path claims from one logical shell line. */
+export function parseShellLine(line: string): Extracted[] {
+  // Substitutions and heredocs hide the real command structure: precision over recall.
+  if (/\$\(|`|<</.test(line)) return [];
+  return splitCommands(tokenize(line)).flatMap(classify);
+}
+
+export interface Piece {
+  text: string;
+  line: number;
+  /** 1-based column of `text[0]` in the source. */
+  col: number;
+}
+
+export interface LogicalLine {
+  text: string;
+  locate(index: number): { line: number; col: number };
+}
+
+const SHELL_PROMPT = /^[$>] +/;
+// Console transcripts print `> pkg@1 script` banners as output, so only `$` marks a command there.
+const HEREDOC = /<<-?\s*['"]?(\w+)['"]?/;
+const CONSOLE_PROMPT = /^\$ +/;
+
+function join(pieces: Piece[]): LogicalLine {
+  const starts: number[] = [];
+  let at = 0;
+  for (const p of pieces) {
+    starts.push(at);
+    at += p.text.length + 1;
+  }
+  return {
+    text: pieces.map((p) => p.text).join(' '),
+    locate(index) {
+      let i = starts.length - 1;
+      while (i > 0 && (starts[i] as number) > index) i--;
+      const p = pieces[i] as Piece;
+      return { line: p.line, col: p.col + index - (starts[i] as number) };
+    },
+  };
+}
+
+/**
+ * Turns fence lines into logical command lines: joins backslash continuations, drops blanks and
+ * comments, strips `$ ` and `> ` prompts. In console-style fences only prompted lines are commands.
+ */
+export function logicalLines(pieces: Piece[], consoleStyle: boolean): LogicalLine[] {
+  const out: LogicalLine[] = [];
+  let open: Piece[] | null = null;
+  let heredoc: string | null = null;
+  for (const piece of pieces) {
+    if (heredoc !== null) {
+      if (piece.text.trim() === heredoc) heredoc = null;
+      continue;
+    }
+    let { text, col } = piece;
+    if (!open) {
+      const prompt = (consoleStyle ? CONSOLE_PROMPT : SHELL_PROMPT).exec(text);
+      if (prompt) {
+        text = text.slice(prompt[0].length);
+        col += prompt[0].length;
+      } else if (consoleStyle) continue;
+    }
+    const lead = text.length - text.trimStart().length;
+    text = text.slice(lead);
+    col += lead;
+    if (!open && (text.trim() === '' || text.startsWith('#'))) continue;
+    const doc = HEREDOC.exec(text);
+    if (doc) {
+      heredoc = doc[1] as string;
+      open = null;
+      continue;
+    }
+    const more = /\\\s*$/.test(text);
+    if (more) text = text.replace(/\\\s*$/, '');
+    open ??= [];
+    open.push({ text, line: piece.line, col });
+    if (!more) {
+      out.push(join(open));
+      open = null;
+    }
+  }
+  if (open) out.push(join(open));
+  return out;
+}

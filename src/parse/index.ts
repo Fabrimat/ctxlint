@@ -1,0 +1,168 @@
+import type { Code, InlineCode, Nodes, Text } from 'mdast';
+import { fromMarkdown } from 'mdast-util-from-markdown';
+import { gfmFromMarkdown } from 'mdast-util-gfm';
+import { gfm } from 'micromark-extension-gfm';
+import type { Claim, ClaimKind, ClaimSource } from '../types.js';
+import { disabledRanges, isDisabled, markerOf, type Toggle } from './markers.js';
+import { inlinePath, linkPath, proseTokens, type PathParts } from './paths.js';
+import { logicalLines, parseShellLine, type Piece } from './shell.js';
+
+export interface ParseOptions {
+  /** Also extract paths mentioned in plain prose (noisier; off by default). */
+  prose?: boolean;
+}
+
+interface Pos {
+  line: number;
+  col: number;
+}
+
+const FENCE_LANGS = new Set(['sh', 'bash', 'shell', 'zsh', 'console', 'shellsession']);
+const CONSOLE_LANGS = new Set(['console', 'shellsession']);
+const PACKAGE_MANAGER_COMMAND = /^(?:npm|pnpm|yarn|bun|npx)(?=\s|$)/;
+const FRONTMATTER = /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/;
+
+/** Empties a leading YAML frontmatter block but keeps its line breaks, so line numbers hold. */
+function blankFrontmatter(text: string): string {
+  return text.replace(FRONTMATTER, (block) => block.replace(/[^\r\n]/g, ''));
+}
+
+function textOf(node: Nodes): string {
+  if ('value' in node) return node.value;
+  return 'children' in node ? node.children.map(textOf).join('') : '';
+}
+
+export function parseMarkdown(text: string, file: string, opts: ParseOptions = {}): Claim[] {
+  const src = blankFrontmatter(text);
+  const tree = fromMarkdown(src, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
+  const lines = src.split(/\r?\n/);
+  const lineStarts = [0];
+  for (const m of src.matchAll(/\n/g)) lineStarts.push(m.index + 1);
+
+  const headings: { depth: number; text: string }[] = [];
+  const toggles: Toggle[] = [];
+  const claims: Claim[] = [];
+
+  // ponytail: linear scan per lookup; use binary search if documents reach tens of thousands of lines.
+  const posAt = (offset: number): Pos => {
+    let i = 0;
+    while (i + 1 < lineStarts.length && (lineStarts[i + 1] as number) <= offset) i++;
+    return { line: i + 1, col: offset - (lineStarts[i] as number) + 1 };
+  };
+
+  const add = (
+    kind: ClaimKind,
+    value: string,
+    pos: Pos,
+    source: ClaimSource,
+    meta?: Record<string, string>,
+  ): void => {
+    claims.push({
+      kind,
+      value,
+      file,
+      line: pos.line,
+      col: pos.col,
+      section: headings.map((h) => h.text),
+      source,
+      ...(meta && Object.keys(meta).length > 0 ? { meta } : {}),
+    });
+  };
+
+  const addPath = (parts: PathParts, pos: Pos, source: ClaimSource): void =>
+    add('path', parts.value, pos, source, parts.meta);
+
+  function inlineCode(node: InlineCode): void {
+    const start = node.position?.start.offset;
+    if (start === undefined) return;
+    const fence = /^`+/.exec(src.slice(start))?.[0].length ?? 1;
+    const code = node.value.trim();
+    const lead = node.value.length - node.value.trimStart().length;
+    const raw = src.slice(start + fence, node.position?.end.offset);
+    const base = start + fence + Math.max(raw.indexOf(node.value), 0) + lead;
+    if (PACKAGE_MANAGER_COMMAND.test(code)) {
+      for (const c of parseShellLine(code)) {
+        add(c.kind, c.value, posAt(base + c.index), 'inline-code', c.meta);
+      }
+      return;
+    }
+    const parts = inlinePath(code);
+    if (parts) addPath(parts, posAt(base), 'inline-code');
+  }
+
+  function fence(node: Code): void {
+    const lang = node.lang?.toLowerCase();
+    const first = node.position?.start.line;
+    if (!lang || !FENCE_LANGS.has(lang) || first === undefined) return;
+    const pieces: Piece[] = node.value.split(/\r?\n/).map((text, i) => {
+      const raw = lines[first + i] ?? '';
+      const indent = raw.endsWith(text) ? raw.length - text.length : 0;
+      return { text, line: first + 1 + i, col: indent + 1 };
+    });
+    for (const logical of logicalLines(pieces, CONSOLE_LANGS.has(lang))) {
+      for (const c of parseShellLine(logical.text)) {
+        add(c.kind, c.value, logical.locate(c.index), 'fence', c.meta);
+      }
+    }
+  }
+
+  function link(url: string, node: Nodes): void {
+    const parts = linkPath(url);
+    const start = node.position?.start;
+    if (parts && start) addPath(parts, { line: start.line, col: start.column }, 'link');
+  }
+
+  function prose(node: Text): void {
+    const start = node.position?.start.offset;
+    if (start === undefined) return;
+    const raw = src.slice(start, node.position?.end.offset);
+    for (const t of proseTokens(raw)) addPath(t, posAt(start + t.index), 'prose');
+  }
+
+  let linkDepth = 0;
+
+  function visit(node: Nodes, muted: boolean): void {
+    switch (node.type) {
+      case 'heading':
+        while ((headings.at(-1)?.depth ?? 0) >= node.depth) headings.pop();
+        headings.push({ depth: node.depth, text: textOf(node) });
+        break;
+      case 'html': {
+        const marker = markerOf(node.value);
+        const line = node.position?.start.line;
+        if ((marker === 'disable' || marker === 'enable') && line !== undefined) {
+          toggles.push({ marker, line });
+        }
+        return;
+      }
+      case 'inlineCode':
+        if (!muted) inlineCode(node);
+        return;
+      case 'code':
+        if (!muted) fence(node);
+        return;
+      case 'definition':
+      case 'image':
+        if (!muted) link(node.url, node);
+        return;
+      case 'link':
+        if (!muted) link(node.url, node);
+        break;
+      case 'text':
+        if (!muted && opts.prose && linkDepth === 0) prose(node);
+        return;
+    }
+    if (!('children' in node)) return;
+    let skip = false;
+    if (node.type === 'link') linkDepth++;
+    for (const child of node.children) {
+      visit(child, muted || skip);
+      skip = child.type === 'html' && markerOf(child.value) === 'ignore';
+    }
+    if (node.type === 'link') linkDepth--;
+  }
+
+  visit(tree, false);
+  const ranges = disabledRanges(toggles);
+  return claims.filter((c) => !isDisabled(c.line, ranges));
+}
