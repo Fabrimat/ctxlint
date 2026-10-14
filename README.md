@@ -10,8 +10,8 @@ Code moves on, the docs do not, and the agent confidently runs scripts that were
 
 ## Status
 
-Early development (v0.x). Milestone 1 checks are available: paths, scripts and commands.
-Symbol, snippet and version checks, CI integrations and LLM-assisted checks are on the [roadmap](#roadmap).
+Early development (v0.x). Six deterministic checks are available: paths, scripts, commands, symbols, snippets and versions.
+CI integrations and LLM-assisted checks are on the [roadmap](#roadmap).
 The output format and configuration may still change before 1.0.
 
 ## Install and quick start
@@ -38,7 +38,7 @@ It never writes files.
 This is the real output on the drift fixture used by the test suite, a small pnpm monorepo whose docs went stale:
 
 ```text
-AGENTS.md  freshness 33% (3/9)
+AGENTS.md  freshness 23% (3/13)
   6:31   error    Path `src/utils/format.ts` does not exist (did you mean `src/utils/formatting.ts`?)           paths
                   suggestion: src/utils/formatting.ts
   7:33   error    Path `src/old/config.ts` does not exist (moved to `src/config.ts`?)                           paths
@@ -48,12 +48,18 @@ AGENTS.md  freshness 33% (3/9)
                   suggestion: build
   18:6   warning  Script `dev` is not defined in `package.json` (it is defined in `packages/web/package.json`)  scripts
   19:1   warning  Command `tsx` is not installed as a dependency                                                commands
+  31:31  warning  Symbol `formatTimeStamp` is not defined in the codebase (did you mean `formatTimestamp`?)     symbols
+                  suggestion: formatTimestamp
+  32:9   warning  `Config` has no member `reload`                                                               symbols
+  33:28  warning  Docs say `zod@3` but `package.json` requires `^4.1.0`                                         versions
+                  suggestion: zod@4
+  38:29  error    Snippet does not type-check: Expected 1 arguments, but got 2. (TS2554)                        snippets
 
 docs/guide.md  freshness 67% (2/3)
   5:24  error  Path `../src/old/config.ts` does not exist (moved to `src/config.ts`?)  paths
                suggestion: src/config.ts
 
-✖ 5 errors, 2 warnings · 20 claims · 10 verified · 3 unknown · freshness 59% · 82 ms
+✖ 6 errors, 5 warnings · 24 claims · 10 verified · 3 unknown · freshness 48% · 698 ms
 ```
 
 Every finding has a position (`line:col`), a severity, the check that produced it and, when one is obvious, a concrete suggestion.
@@ -61,14 +67,14 @@ The exit code is 1 because there are errors; see [exit codes](#exit-codes).
 
 ## What it checks
 
-| Check      | Status  | What it verifies                                                                          |
-| ---------- | ------- | ----------------------------------------------------------------------------------------- |
-| `paths`    | M1      | Files and directories mentioned in inline code and links exist. Suggests renames/moves.   |
-| `scripts`  | M1      | Script names used with `npm`, `pnpm`, `yarn` and `bun` exist in the right `package.json`. |
-| `commands` | M1      | Binaries used in shell fences are installed dependencies (system tools are skipped).      |
-| `symbols`  | planned | Functions, classes and exports named in the docs still exist.                             |
-| `snippets` | planned | Code blocks still match, or still compile against, the code they describe.                |
-| `versions` | planned | Versions and engine requirements in the docs match the manifests.                         |
+| Check      | Status | What it verifies                                                                          |
+| ---------- | ------ | ----------------------------------------------------------------------------------------- |
+| `paths`    | M1     | Files and directories mentioned in inline code and links exist. Suggests renames/moves.   |
+| `scripts`  | M1     | Script names used with `npm`, `pnpm`, `yarn` and `bun` exist in the right `package.json`. |
+| `commands` | M1     | Binaries used in shell fences are installed dependencies (system tools are skipped).      |
+| `symbols`  | M2     | Functions, classes and members named in inline code exist. Suggests renamed symbols.      |
+| `snippets` | M2     | `ts`/`tsx` code blocks still type-check against the code they import.                     |
+| `versions` | M2     | `pkg@version` mentions match the installed version, the lockfile or `package.json`.       |
 
 Monorepos are understood: a script is looked up in the nearest package, workspace filters are resolved, and a script that exists only in another workspace is reported with its location.
 
@@ -79,6 +85,8 @@ Monorepos are understood: a script is looked up in the nearest package, workspac
 - **Inline code** that looks like a path (it has an extension or a slash) becomes a path claim. Inline `npm`, `pnpm`, `yarn`, `bun` and `npx` commands become script claims.
 - **Links and images** with a relative target become path claims, resolved against the document's own directory first, then the repo root. URLs and anchors are ignored.
 - **Shell fences** (`sh`, `bash`, `shell`, `zsh`, `console`) are split into commands. Package-manager invocations become script claims and the first binary of other commands becomes a command claim. Line continuations and `&&` chains are handled.
+- **Inline code** shaped like a symbol (`createUser()`, `UserService.find`, `new Client()`, or a camelCase/PascalCase name) becomes a symbol claim; `zod@4`-style mentions and `pnpm add pkg@range` arguments become version claims.
+- **TypeScript fences** (`ts`, `typescript`, `tsx`, `mts`, `cts`) become snippet claims. Add `ignore` to the fence info (` ```ts ignore `) or a `ctxtruth-ignore` comment to skip pseudo-code.
 - **Plain prose** is only scanned when `prose` is enabled, because it is noisy.
 - **Frontmatter** is skipped.
 
@@ -88,6 +96,9 @@ Some claims cannot be verified and are reported as `unknown`, not as failures. T
 - _Gitignored paths_ such as build output do not have to exist in a fresh checkout.
 - _System binaries_ such as `git` or `curl` are not project dependencies.
 - _Paths outside the repository_ cannot be checked.
+- _Symbols that are not in the repository_ (globals, imports from packages, framework hooks) cannot be told apart from deleted ones, so a missing symbol is only reported when there is evidence of a rename: a close match in the codebase. A missing member of a class or object the repository defines is always reported.
+- _Snippets_ only fail on a small set of type errors that mean drift: a missing export, property or module, or a wrong argument count or type. Undeclared variables and other partial-snippet noise are ignored, and code that does not parse is `unknown`.
+- _Versions_ of packages no `package.json` declares are not checked.
 
 Precision comes first: when in doubt, a claim is `unknown`, never a finding.
 
@@ -120,7 +131,7 @@ All options and their defaults:
 
 Default `targets`: any `AGENTS.md` and `CLAUDE.md` (at any depth), Cursor rules (`.md` and `.mdc` files under the Cursor rules directory), the Copilot instructions file under the GitHub directory, the root README and everything in `docs/`.
 
-Default `rules`: `paths` and `scripts` are `error`; `commands`, `symbols` and `versions` are `warning`; `snippets` is `error`. Checks that are not implemented yet are ignored.
+Default `rules`: `paths` and `scripts` are `error`; `commands`, `symbols` and `versions` are `warning`; `snippets` is `error`.
 
 ### Ignoring claims in a document
 
@@ -181,8 +192,8 @@ console.log(formatReport(report, 'text', { color: false, verbose: false }));
 
 ## Roadmap
 
-- **M1 (current):** paths, scripts and commands checks, text and JSON reports, config.
-- **M2:** symbols, snippets and versions checks.
+- **M1 (done):** paths, scripts and commands checks, text and JSON reports, config.
+- **M2 (current):** symbols, snippets and versions checks.
 - **M3:** GitHub Action, SARIF output, reporting only findings a pull request introduces, `--changed-only`.
 - **M4:** history engine: `ctxtruth blame` to find the commit that made a claim stale, and the DriftBench dataset.
 - **M5:** opt-in LLM checks with cost tracking, and evals to measure them.
