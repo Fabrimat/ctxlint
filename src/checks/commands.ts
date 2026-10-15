@@ -20,7 +20,7 @@ const BIN_PACKAGES: Readonly<Record<string, readonly string[]>> = {
   remix: ['@remix-run/dev'],
 };
 
-function provider(bin: string, all: PackageInfo[]): PackageInfo | undefined {
+export function provider(bin: string, all: PackageInfo[]): PackageInfo | undefined {
   const names = [bin, ...(BIN_PACKAGES[bin] ?? [])];
   return all.find((p) => p.bins.includes(bin) || names.some((n) => Object.hasOwn(p.deps, n)));
 }

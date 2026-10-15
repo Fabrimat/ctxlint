@@ -191,7 +191,7 @@ function pnpm(args: Tok[]): Extracted[] {
       : [];
   }
   if (PNPM_BUILTINS.has(sub.text)) return [];
-  return script('pnpm', sc, implicitScript(sub));
+  return script('pnpm', sc, implicitScript(sub), { implicit: 'true' });
 }
 
 const YARN_BUILTINS = new Set(
@@ -213,7 +213,7 @@ function yarn(args: Tok[]): Extracted[] {
     return script('yarn', sc, b?.text === 'run' ? c : b, { filter: a.text });
   }
   if (YARN_BUILTINS.has(sub.text)) return [];
-  return script('yarn', sc, implicitScript(sub));
+  return script('yarn', sc, implicitScript(sub), { implicit: 'true' });
 }
 
 function bun(args: Tok[]): Extracted[] {

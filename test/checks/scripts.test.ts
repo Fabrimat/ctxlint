@@ -18,6 +18,29 @@ const ctx = makeCtx(
 );
 const run = async (c: Claim) => (await scriptsCheck.run([c], ctx))[0] as CheckResult;
 
+describe('implicit pnpm/yarn scripts', () => {
+  const index = makeIndex({
+    files: ['package.json'],
+    packages: [{ dir: '', scripts: { build: 'tsc' }, deps: { vitest: '^4' } }],
+  });
+  const implicit = (value: string) => claim(value, { meta: { pm: 'pnpm', implicit: 'true' } });
+  const one = async (c: Claim, i = index) => (await scriptsCheck.run([c], makeCtx(i)))[0];
+
+  it('passes a dependency binary run without `run`', async () => {
+    expect((await one(implicit('vitest')))?.status).toBe('pass');
+  });
+
+  it('still fails `pnpm run <binary>` and unknown names', async () => {
+    const explicit = claim('vitest', { meta: { pm: 'pnpm' } });
+    expect((await one(explicit))?.status).toBe('fail');
+    expect((await one(implicit('buidl')))?.status).toBe('fail');
+  });
+
+  it('is unknown at a past commit, which has no installed binaries', async () => {
+    expect((await one(implicit('vite'), { ...index, depsRoot: '/head' }))?.status).toBe('unknown');
+  });
+});
+
 describe('scripts check', () => {
   it('passes a root script from the root doc', async () => {
     const c = claim('build');

@@ -1,6 +1,7 @@
 import { posix } from 'node:path';
 import { globToRegExp } from '../index/glob.js';
 import { closest } from '../util/distance.js';
+import { provider } from './commands.js';
 import type { Check, CheckContext, CheckResult, Claim, PackageInfo } from '../types.js';
 import { docDir, fail, packageJsonPath, pass, unknown } from './result.js';
 
@@ -55,6 +56,19 @@ export const scriptsCheck: Check = {
       const name = claim.value;
       const owner = target.find((p) => Object.hasOwn(p.scripts, name));
       if (owner) return pass(claim, 'scripts', [packageJsonPath(owner.dir)]);
+
+      // `pnpm vitest` / `yarn vitest` without such a script run the dependency's binary.
+      if (claim.meta?.['implicit'] === 'true') {
+        const pkg = provider(name, all);
+        if (pkg) return pass(claim, 'scripts', [packageJsonPath(pkg.dir)]);
+        if (ctx.index.depsRoot !== undefined) {
+          return unknown(
+            claim,
+            'scripts',
+            'no script; may be a binary not installed at a past commit',
+          );
+        }
+      }
 
       const first = packageJsonPath(target[0]?.dir ?? '');
       const other = all.find((p) => !target.includes(p) && Object.hasOwn(p.scripts, name));
