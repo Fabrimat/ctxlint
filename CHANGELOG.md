@@ -19,6 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - `markdown` (pull request comment) and `sarif` (code scanning) output formats, plus `--output`, `--sarif` and `--link-base`.
 - `--new-only --base <ref>`: compares with the merge base in a temporary git worktree and reports only the claims a change made false, telling code changes apart from doc edits.
 - `--changed-only --base <ref>`: only checks docs, and claims about code, changed since the base.
+- `ctxtruth blame`: finds the commit that made each stale claim false (shared binary search over the first-parent history in one temporary worktree), or reports it as stale when written, broken by uncommitted changes, or undetermined; names files the breaking commit renamed or deleted.
+- `ctxtruth history`: walks the history and records stale episodes (opened by code or docs, resolved by code or docs, days and commits open) as text, JSON or JSONL.
+- DriftBench: a dataset builder over pinned open-source repositories, with a dataset card.
 - Composite GitHub Action that upserts a single pull request comment and uploads SARIF.
 - Configuration via `ctxtruth.config.json`/`.ts`/`.js`, validated, with a `defineConfig` helper.
 - Text and JSON reports with per-file freshness scores.

@@ -186,6 +186,37 @@ ctxtruth check [paths...] [options]
 
 `FORCE_COLOR` (anything but `0`) forces colour on.
 
+### `ctxtruth blame`
+
+```text
+ctxtruth blame [paths...] [--format text|json|agent] [--config <path>] [--root <dir>]
+```
+
+For every claim `check` reports, finds the commit that made it false: it evaluates today's claim against the code at past commits of the first-parent history (one temporary worktree, binary search shared across claims). Each claim gets one cause:
+
+| Cause                | Meaning                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `broken-by`          | The first commit where the claim became false, with renames or deletions of the files it relied on.  |
+| `stale-when-written` | The claim was already false in the commit that wrote the doc line.                                   |
+| `uncommitted`        | The claim holds at the HEAD commit; uncommitted changes break it.                                    |
+| `undetermined`       | The check cannot verify the claim at past commits (e.g. installed versions), so no cause is guessed. |
+
+```text
+$ ctxtruth blame --format agent
+ctxtruth blame: 1 stale claim. Each line names the commit that made the claim false; inspect it with `git show <sha>`.
+CLAUDE.md:6:13 [paths] `src/utils/formatting.ts` broken by 4f01c11 (2026-10-15, "refactor: rename formatting") — renamed to `src/utils/text.ts` there
+```
+
+Past commits are checked with today's installed dependencies, so snippet and symbol blame can shift around dependency major upgrades. A doc line written on a side branch is checked against that branch's tree. Needs the full git history (`fetch-depth: 0` on GitHub Actions). Exit code 0, or 2 on errors.
+
+### `ctxtruth history`
+
+```text
+ctxtruth history [--max-commits <n>] [--since <ref>] [--checks <ids>] [--format text|jsonl|json] [--output <file>]
+```
+
+Walks the last `n` first-parent commits (default 100) or those after `--since`, checks every commit's docs against that commit's code, and records **stale episodes**: when a claim became false, whether a code change or a doc edit caused it, and when and how it was resolved. The text format summarises them (open episodes, cause split, median days open); `jsonl` emits one episode per line. The `commands` check is skipped because past commits have no installed binaries. This is the engine behind [DriftBench](bench/driftbench/README.md).
+
 ### Exit codes
 
 | Code | Meaning                                                    |
@@ -215,8 +246,8 @@ console.log(formatReport(report, 'text', { color: false, verbose: false }));
 
 - **M1 (done):** paths, scripts and commands checks, text and JSON reports, config.
 - **M2 (done):** symbols, snippets and versions checks.
-- **M3 (current):** GitHub Action, SARIF output, reporting only findings a pull request introduces, `--changed-only`.
-- **M4:** history engine: `ctxtruth blame` to find the commit that made a claim stale, and the DriftBench dataset.
+- **M3 (done):** GitHub Action, SARIF output, reporting only findings a pull request introduces, `--changed-only`.
+- **M4 (current):** history engine: `ctxtruth blame` to find the commit that made a claim stale, `ctxtruth history`, and the DriftBench dataset.
 - **M5:** opt-in LLM checks with cost tracking, and evals to measure them.
 - **M6:** a study of documentation drift on real repositories.
 
