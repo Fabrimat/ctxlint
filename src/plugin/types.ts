@@ -53,7 +53,13 @@ export type PluginClaim = Claim & {
 
 export type Verdict =
   | { status: 'pass'; resolvedFiles?: string[] }
-  | { status: 'fail'; message: string; suggestion?: string; resolvedFiles?: string[] }
+  | {
+      status: 'fail';
+      message: string;
+      /** Replacement for the whole claim `value` (for a command: the full corrected command). */
+      suggestion?: string;
+      resolvedFiles?: string[];
+    }
   | { status: 'unknown'; reason: string };
 
 export type PluginIndex = Readonly<Pick<RepoIndex, 'files' | 'packages'>>;

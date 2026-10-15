@@ -33,7 +33,7 @@ export default (options = {}) => {
             const bad = flags.find((f) => f !== '--x');
             return bad === undefined
               ? { status: 'pass' }
-              : { status: 'fail', message: `Unknown flag \`${bad}\``, suggestion: '--x' };
+              : { status: 'fail', message: `Unknown flag \`${bad}\``, suggestion: c.value.replace(bad, '--x') };
           });
         },
       },

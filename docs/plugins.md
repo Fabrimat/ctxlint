@@ -53,7 +53,7 @@ export default (options) =>
 `verify` gets every claim of its check in one batch and returns one verdict per claim, in the same order:
 
 - `{ status: 'pass', resolvedFiles? }`: the claim holds. `resolvedFiles` lists the repo-relative files it depends on (used by `--changed-only`).
-- `{ status: 'fail', message, suggestion?, resolvedFiles? }`: the claim is false.
+- `{ status: 'fail', message, suggestion?, resolvedFiles? }`: the claim is false. `suggestion` replaces the whole claim `value` (the agent format prints "replace `value` with `suggestion`"), so for a command it is the full corrected command.
 - `{ status: 'unknown', reason }`: the claim cannot be verified. Unknown never becomes a finding.
 
 Verdicts are validated. A `verify` that throws or rejects, returns the wrong number of verdicts, or returns an invalid verdict makes those claims unknown, with a reason naming the plugin.
