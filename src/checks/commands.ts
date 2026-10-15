@@ -34,6 +34,10 @@ export const commandsCheck: Check = {
       if (SYSTEM_BINARIES.has(bin)) return unknown(claim, 'commands', 'system binary');
       const pkg = provider(bin, ctx.index.packages.all);
       if (pkg) return pass(claim, 'commands', [packageJsonPath(pkg.dir)]);
+      // A past commit's worktree has no node_modules/.bin, so a missing provider proves nothing.
+      if (ctx.index.depsRoot !== undefined) {
+        return unknown(claim, 'commands', 'no installed binaries at a past commit');
+      }
       return fail(
         claim,
         'commands',

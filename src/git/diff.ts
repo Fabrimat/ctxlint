@@ -4,13 +4,31 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 const MAX_BUFFER = 256 * 1024 * 1024;
 
-/** Runs git in `cwd` and returns stdout. */
+/** Variables that redirect git away from the repository `-C` names (set when run from a hook). */
+const REDIRECTING = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_COMMON_DIR',
+  'GIT_PREFIX',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+];
+
+function clean(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !REDIRECTING.includes(k)));
+}
+
+/** Runs git in `cwd` and returns stdout. Every caller names its repository with `-C`. */
 export async function git(
   cwd: string,
   args: string[],
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string> {
-  const { stdout } = await run('git', ['-C', cwd, ...args], { maxBuffer: MAX_BUFFER, env });
+  const { stdout } = await run('git', ['-C', cwd, ...args], {
+    maxBuffer: MAX_BUFFER,
+    env: clean(env),
+  });
   return stdout;
 }
 

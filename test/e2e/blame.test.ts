@@ -183,3 +183,37 @@ describe('blame on claims the check cannot verify in the past', () => {
     SLOW,
   );
 });
+
+describe('git environment inherited from a hook', () => {
+  it(
+    'leaves the real index alone when GIT_INDEX_FILE points at it',
+    async () => {
+      const r = history();
+      writeFileSync(join(r.dir, 'staged.txt'), 'staged\n');
+      r.git('add', 'staged.txt');
+      rmSync(join(r.dir, 'src/conf.ts'));
+      const before = status(r.dir);
+      const saved = process.env['GIT_INDEX_FILE'];
+      process.env['GIT_INDEX_FILE'] = join(r.dir, '.git', 'index');
+      try {
+        expect((await run(r.dir, ['--format', 'agent'])).code).toBe(0);
+        let err = '';
+        const io: CliIO = {
+          stdout: () => undefined,
+          stderr: (s) => (err += s),
+          cwd: r.dir,
+          isTTY: false,
+          env: {},
+        };
+        expect(await main(['history', '--max-commits', '3'], io)).toBe(0);
+        expect(err).toBe('');
+      } finally {
+        if (saved === undefined) delete process.env['GIT_INDEX_FILE'];
+        else process.env['GIT_INDEX_FILE'] = saved;
+      }
+      expect(status(r.dir)).toBe(before);
+      expect(worktrees(r.dir)).toBe(1);
+    },
+    SLOW,
+  );
+});

@@ -1,11 +1,7 @@
-import { execFile } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import { posix } from 'node:path';
-import { promisify } from 'node:util';
+import { git as runGit } from '../git/diff.js';
 import type { FileIndex } from '../types.js';
-
-const run = promisify(execFile);
-const MAX_BUFFER = 256 * 1024 * 1024;
 
 export function buildFileIndex(paths: readonly string[]): FileIndex {
   const files = [...new Set(paths)];
@@ -28,8 +24,7 @@ export function buildFileIndex(paths: readonly string[]): FileIndex {
 }
 
 async function git(root: string, args: string[]): Promise<string[]> {
-  const { stdout } = await run('git', ['-C', root, ...args], { maxBuffer: MAX_BUFFER });
-  return stdout.split('\0').filter(Boolean);
+  return (await runGit(root, args)).split('\0').filter(Boolean);
 }
 
 async function listWithGit(root: string): Promise<string[]> {

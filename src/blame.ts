@@ -97,15 +97,20 @@ export async function multiBisect(
 
 const ZERO = /^0+$/;
 
-/** The commit that last wrote `file:line` in the working tree; null for an uncommitted line. */
-async function writtenBy(root: string, file: string, line: number): Promise<string | null> {
+/** Line number -> commit that last wrote it in the working tree; uncommitted lines are absent. */
+async function blameFile(root: string, file: string): Promise<Map<number, string>> {
+  const lines = new Map<number, string>();
+  let out: string;
   try {
-    const out = await git(root, ['blame', '--porcelain', '-L', `${line},${line}`, '--', file]);
-    const sha = out.split(' ', 1)[0] ?? '';
-    return ZERO.test(sha) ? null : sha;
+    out = await git(root, ['blame', '--porcelain', '--', file]);
   } catch {
-    return null; // untracked file
+    return lines; // untracked file
   }
+  for (const row of out.split('\n')) {
+    const m = /^([0-9a-f]{40,64}) \d+ (\d+)/.exec(row);
+    if (m && !ZERO.test(m[1] as string)) lines.set(Number(m[2]), m[1] as string);
+  }
+  return lines;
 }
 
 async function isAncestor(root: string, a: string, b: string): Promise<boolean> {
@@ -181,10 +186,14 @@ export async function blame(opts: BlameOptions): Promise<BlameReport> {
     return fresh;
   };
   const ago = async (sha: string): Promise<number> =>
-    Number((await git(root, ['rev-list', '--count', `${sha}..HEAD`])).trim());
+    Number((await git(root, ['rev-list', '--count', '--first-parent', `${sha}..HEAD`])).trim());
 
-  const written = await Promise.all(
-    results.map((r) => writtenBy(root, (r.finding as Finding).file, (r.finding as Finding).line)),
+  const blamed = new Map<string, Map<number, string>>();
+  for (const f of new Set(results.map((r) => (r.finding as Finding).file))) {
+    blamed.set(f, await blameFile(root, f));
+  }
+  const written = results.map(
+    (r) => blamed.get((r.finding as Finding).file)?.get((r.finding as Finding).line) ?? null,
   );
   const fps = results.map(fingerprint);
   const relied = new Map<string, ReadonlySet<string>>();

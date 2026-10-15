@@ -21,7 +21,11 @@ function commitRef(b: BlameFinding): string {
 
 const UNDETERMINED =
   'could not be traced through history (the check cannot verify it at past commits)';
-const UNCONFIRMED = ' (earlier state not verifiable)';
+const UNCONFIRMED = ' (earlier commits not verifiable)';
+
+/** `broken-by` asserts the previous commit passed; without that proof the claim only first fails there. */
+const verb = (b: BlameFinding): string =>
+  b.confirmedBefore === false ? 'first fails at' : 'broken by';
 
 function agentLine(b: BlameFinding): string {
   const flat = b.value.replace(/\s+/g, ' ');
@@ -37,7 +41,7 @@ function agentLine(b: BlameFinding): string {
   const hint = b.changes?.map((c) =>
     c.status === 'renamed' ? `renamed to \`${c.to}\` there` : 'deleted there',
   );
-  return `${head} broken by ${commitRef(b)}${hint && hint.length > 0 ? ` — ${hint.join(', ')}` : ''}${b.confirmedBefore === false ? UNCONFIRMED : ''}`;
+  return `${head} ${verb(b)} ${commitRef(b)}${hint && hint.length > 0 ? ` — ${hint.join(', ')}` : ''}${b.confirmedBefore === false ? UNCONFIRMED : ''}`;
 }
 
 function formatAgent(report: BlameReport): string {
@@ -55,7 +59,7 @@ function textLines(b: BlameFinding): string[] {
   const lines = [`  ${where}  [${b.finding.checkId}] ${b.finding.message}`];
   if (b.cause === 'broken-by' && b.commit) {
     lines.push(
-      `      broken by ${who(b.commit)}${ago}${b.confirmedBefore === false ? UNCONFIRMED : ''}`,
+      `      ${verb(b)} ${who(b.commit)}${ago}${b.confirmedBefore === false ? UNCONFIRMED : ''}`,
     );
   } else if (b.cause === 'undetermined') lines.push(`      ${UNDETERMINED}`);
   else if (b.cause === 'stale-when-written' && b.commit) {
