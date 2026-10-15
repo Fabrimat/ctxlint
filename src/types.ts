@@ -131,6 +131,8 @@ export interface Check {
    * PATH): at a past commit it cannot be reproduced, so comparisons treat it as not comparable.
    */
   environment?: boolean;
+  /** Plugin checks: the SARIF rule description. */
+  description?: string;
   run(claims: readonly Claim[], ctx: CheckContext): CheckResult[] | Promise<CheckResult[]>;
 }
 
