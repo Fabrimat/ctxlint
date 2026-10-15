@@ -74,6 +74,7 @@ const exceeds = (
 /** Runs the CLI and returns the process exit code (0 clean, 1 findings, 2 usage or runtime error). */
 export async function main(argv: string[], io: CliIO): Promise<number> {
   let code = 0;
+  const onWarning = (message: string): void => io.stderr(`warning: ${message}\n`);
   const cli = new Command()
     .name('ctxtruth')
     .description('Catch drift between your code and the docs AI agents read.')
@@ -113,7 +114,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
       const { formatReport } = await import('./report/index.js');
       const root = resolve(io.cwd, flags.root ?? '.');
       const base = resolveBase(flags, io);
-      const { report, config } = await check({
+      const { report, config, descriptions } = await check({
         root,
         paths,
         cwd: io.cwd,
@@ -121,6 +122,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         ...(base !== undefined && { base }),
         ...(flags.changedOnly && { changedOnly: true }),
         ...(flags.newOnly && { newOnly: true }),
+        onWarning,
       });
       if (paths.length > 0 && report.files.length === 0) {
         // A typo in a CI path argument must not pass silently.
@@ -130,6 +132,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
       const opts = {
         color: useColor(format, flags, io),
         verbose: !!flags.verbose,
+        descriptions,
         ...(flags.linkBase !== undefined && { linkBase: flags.linkBase }),
       };
       const out = formatReport(report, format, opts);
@@ -163,6 +166,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         paths,
         cwd: io.cwd,
         ...(flags.config !== undefined && { configPath: resolve(io.cwd, flags.config) }),
+        onWarning,
       });
       const format = resolveFormat({ ...flags, color: false }, io);
       io.stdout(formatBlame(report, format === 'json' || format === 'agent' ? format : 'text'));
@@ -217,6 +221,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
               .filter(Boolean),
           }),
           ...(flags.repoName !== undefined && { repoName: flags.repoName }),
+          onWarning,
           ...(tty && {
             onProgress: (n: number, total: number) => io.stderr(`\r${n}/${total} commits`),
           }),

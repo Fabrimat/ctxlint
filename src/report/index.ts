@@ -20,6 +20,8 @@ export interface FormatOptions {
    * Used by the markdown output; files are plain text without it.
    */
   linkBase?: string;
+  /** SARIF rule descriptions of plugin checks, by check id. */
+  descriptions?: Record<string, string>;
 }
 
 export function formatReport(report: Report, format: Format, opts: FormatOptions): string {

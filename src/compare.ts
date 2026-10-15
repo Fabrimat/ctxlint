@@ -3,8 +3,8 @@ import { fingerprint, type CheckId, type CheckResult, type Comparison } from './
 
 type Counts = Omit<Comparison, 'base' | 'baseSha'>;
 
-/** Checks whose base results depend on installed packages, which the base checkout lacks. */
-const ENVIRONMENT_CHECKS: ReadonlySet<CheckId> = new Set(['commands', 'versions']);
+/** Built-in checks whose base results depend on installed packages, which the base checkout lacks. */
+export const ENVIRONMENT_CHECKS: ReadonlySet<CheckId> = new Set(['commands', 'versions']);
 
 /** A base result with its doc path mapped through the renames since the base. */
 
@@ -60,6 +60,8 @@ export function classify(
   head: readonly CheckResult[],
   base: readonly CheckResult[],
   diff: ChangedFiles,
+  /** Checks whose verdicts depend on the environment (built-ins plus `environment` plugin checks). */
+  environment: ReadonlySet<CheckId> = ENVIRONMENT_CHECKS,
 ): Counts {
   const counts: Counts = { introduced: 0, existing: 0, fixed: 0, notComparable: 0 };
   const baseByKey = groupByKey(base);
@@ -91,10 +93,10 @@ export function classify(
       }
     }
     // Base failures left over are fixed when the claim is still there and passes; a removed claim
-    // is not a fix. Commands and versions are skipped: the base checkout has no node_modules, so
+    // is not a fix. Environment checks are skipped: the base checkout has no node_modules, so
     // their base failures can come from the environment rather than the code.
     const id = results[0]?.checkId;
-    if (id !== undefined && ENVIRONMENT_CHECKS.has(id)) continue;
+    if (id !== undefined && environment.has(id)) continue;
     counts.fixed += Math.min(fails, results.filter((x) => x.status === 'pass').length);
   }
   return counts;

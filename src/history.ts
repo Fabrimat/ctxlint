@@ -1,12 +1,11 @@
 import { existsSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { checks } from './checks/index.js';
-import { loadConfig, type Config } from './config/index.js';
+import type { Config } from './config/index.js';
 import { git } from './git/diff.js';
 import { assertFullHistory, commitInfo, firstParentChain } from './git/history.js';
 import { withWorktree } from './git/worktree.js';
 import { buildRepoIndex } from './index/index.js';
-import { collectClaims, evaluate } from './run.js';
+import { collectClaims, evaluate, load, type Loaded } from './run.js';
 import { fingerprint, type CheckId, type CheckResult, type ClaimKind } from './types.js';
 
 export interface CommitRef {
@@ -208,6 +207,8 @@ export interface HistoryOptions {
   repoName?: string;
   /** The repository is untrusted: never import its config or plugin code. */
   untrusted?: boolean;
+  /** Receives non-fatal configuration warnings. */
+  onWarning?: (message: string) => void;
   onProgress?: (done: number, total: number) => void;
 }
 
@@ -221,19 +222,20 @@ export interface HistoryResult {
 export async function history(opts: HistoryOptions): Promise<HistoryResult> {
   const root = resolve(opts.root);
   await assertFullHistory(root);
-  const { config: loaded } = await loadConfig(root, opts.configPath);
-  const known = checks.map((c) => c.id);
+  const base = await load(root, opts);
+  const known = base.checks.map((c) => c.id);
   for (const id of opts.checks ?? []) {
     if (!known.includes(id as CheckId)) {
       throw new Error(`unknown check \`${id}\` (known: ${known.join(', ')})`);
     }
   }
-  const rules = { ...loaded.rules };
+  const rules = { ...base.config.rules };
   for (const id of known) {
     // `commands` needs installed binaries, which a historical checkout lacks: always off here.
     if (id === 'commands' || (opts.checks && !opts.checks.includes(id))) rules[id] = 'off';
   }
-  const config: Config = { ...loaded, rules };
+  const config: Config = { ...base.config, rules };
+  const loaded: Loaded = { ...base, config };
 
   const prefix = (await git(root, ['rev-parse', '--show-prefix'])).trim().replace(/\/$/, '');
   let chain = await firstParentChain(root);
@@ -274,8 +276,8 @@ export async function history(opts: HistoryOptions): Promise<HistoryResult> {
       let results: SlimResult[] = [];
       if (existsSync(at)) {
         const index = await buildRepoIndex(at, root);
-        const { claims } = await collectClaims(index, config);
-        results = (await evaluate(claims, index, config)).map(slim);
+        const { claims } = await collectClaims(index, loaded);
+        results = (await evaluate(claims, index, loaded)).map(slim);
       }
       const info = await commitInfo(root, sha);
       tracker.push({ sha: info.sha, date: info.date, subject: info.subject }, changed, results);

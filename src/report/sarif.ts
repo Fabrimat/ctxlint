@@ -17,8 +17,7 @@ const DESCRIPTIONS: Record<BuiltinCheckId, string> = {
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
 /** SARIF 2.1.0 for GitHub code scanning: one result per reported finding. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function formatSarif(report: Report, _opts: FormatOptions): string {
+export function formatSarif(report: Report, opts: FormatOptions): string {
   const results = reportedResults(report);
   const ids = [...new Set(results.map((r) => r.checkId))].sort();
   const level = (id: CheckId): string =>
@@ -36,7 +35,9 @@ export function formatSarif(report: Report, _opts: FormatOptions): string {
             informationUri: 'https://github.com/Fabrimat/ctxtruth',
             rules: ids.map((id) => ({
               id,
-              shortDescription: { text: DESCRIPTIONS[id as BuiltinCheckId] ?? id },
+              shortDescription: {
+                text: DESCRIPTIONS[id as BuiltinCheckId] ?? opts.descriptions?.[id] ?? id,
+              },
               helpUri: HELP_URI,
               defaultConfiguration: { level: level(id) },
             })),

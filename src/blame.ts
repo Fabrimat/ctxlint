@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { evaluate, check, type CheckOptions } from './run.js';
+import { checkLoaded, evaluate, load, type CheckOptions } from './run.js';
 import { git } from './git/diff.js';
 import { assertFullHistory, commitInfo, firstParentChain, type CommitInfo } from './git/history.js';
 import { withWorktree } from './git/worktree.js';
@@ -161,7 +161,7 @@ async function changesBetween(
 
 export type BlameOptions = Pick<
   CheckOptions,
-  'root' | 'paths' | 'configPath' | 'cwd' | 'untrusted'
+  'root' | 'paths' | 'configPath' | 'cwd' | 'untrusted' | 'onWarning'
 >;
 
 /**
@@ -173,7 +173,8 @@ export async function blame(opts: BlameOptions): Promise<BlameReport> {
   const started = performance.now();
   const root = resolve(opts.root);
   await assertFullHistory(root);
-  const { report, config } = await check(opts);
+  const loaded = await load(root, opts);
+  const { report } = await checkLoaded(opts, loaded);
   const results = reportedResults(report);
   const chain = await firstParentChain(root);
   if (chain.length === 0) throw new Error('blame needs at least one commit');
@@ -220,7 +221,7 @@ export async function blame(opts: BlameOptions): Promise<BlameReport> {
         const rs = await evaluate(
           ids.map((id) => (results[id] as (typeof results)[number]).claim),
           await buildRepoIndex(at, root),
-          config,
+          loaded,
         );
         const byFp = new Map(rs.map((r) => [fingerprint(r), r]));
         for (const id of ids) {
