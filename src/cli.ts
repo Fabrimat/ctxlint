@@ -3,6 +3,7 @@ import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CommanderError, Command, Option } from 'commander';
+import type { HistoryFormat } from './report/history.js';
 import type { Severity } from './types.js';
 
 export interface CliIO {
@@ -140,6 +141,63 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
       const failOn: Severity | 'none' = flags.failOn ?? config.failOn;
       code = exceeds(report.summary.errors, report.summary.warnings, failOn) ? 1 : 0;
     });
+
+  cli
+    .command('history')
+    .description('Walk the git history and record when each doc claim went stale')
+    .addOption(
+      new Option('--format <format>', 'output format')
+        .choices(['text', 'jsonl', 'json'])
+        .default('text'),
+    )
+    .option('--output <file>', 'write the report to a file instead of stdout')
+    .option('--max-commits <n>', 'walk only the most recent n commits', '100')
+    .option('--since <ref>', 'walk the commits after this ref (exclusive)')
+    .option('--checks <ids>', 'comma-separated checks to run (default: all enabled but commands)')
+    .option('--repo-name <name>', 'repository name in the output (default: the root folder name)')
+    .option('--config <path>', 'config file (default: ctxtruth.config.* in the root)')
+    .option('--root <dir>', 'repository root (default: current directory)')
+    .exitOverride()
+    .action(
+      async (flags: {
+        format: HistoryFormat;
+        output?: string;
+        maxCommits: string;
+        since?: string;
+        checks?: string;
+        repoName?: string;
+        config?: string;
+        root?: string;
+      }) => {
+        const maxCommits = Number(flags.maxCommits);
+        if (!Number.isInteger(maxCommits) || maxCommits < 1) {
+          throw new Error('--max-commits must be a positive integer');
+        }
+        const { history } = await import('./history.js');
+        const { formatHistory } = await import('./report/history.js');
+        const tty = process.stderr.isTTY;
+        const result = await history({
+          root: resolve(io.cwd, flags.root ?? '.'),
+          maxCommits,
+          ...(flags.config !== undefined && { configPath: resolve(io.cwd, flags.config) }),
+          ...(flags.since !== undefined && { since: flags.since }),
+          ...(flags.checks !== undefined && {
+            checks: flags.checks
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean),
+          }),
+          ...(flags.repoName !== undefined && { repoName: flags.repoName }),
+          ...(tty && {
+            onProgress: (n: number, total: number) => io.stderr(`\r${n}/${total} commits`),
+          }),
+        });
+        if (tty) io.stderr('\n');
+        const out = formatHistory(result, flags.format);
+        if (flags.output === undefined) io.stdout(out);
+        else writeFileSync(resolve(io.cwd, flags.output), out);
+      },
+    );
 
   try {
     await cli.parseAsync(argv, { from: 'user' });
