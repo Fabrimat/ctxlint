@@ -73,6 +73,14 @@ describe('--untrusted', { timeout: 30_000 }, () => {
     expect(existsSync(join(repo.dir, 'marker'))).toBe(false);
   });
 
+  it.each(['cfg.txt', 'cfg.JS', 'cfg'])('rejects explicit non-JSON config %s', async (name) => {
+    const repo = setup();
+    writeFileSync(join(repo.dir, name), evil(repo.dir));
+    const r = await run(['check', '--untrusted', '--config', name, '--root', repo.dir], repo.dir);
+    expect(r.code).toBe(2);
+    expect(existsSync(join(repo.dir, 'marker'))).toBe(false);
+  });
+
   it('ignores plugins in a JSON config with a warning', async () => {
     const repo = setup({ 'ctxtruth.config.json': '{"plugins":["./evil.mjs"]}' });
     for (const cmd of ['check', 'blame']) {

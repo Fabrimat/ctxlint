@@ -17,9 +17,12 @@ export class ConfigError extends Error {
   override name = 'ConfigError';
 }
 
+// The one predicate deciding how a config is read: JSON is parsed, anything else is imported.
+const isJson = (path: string): boolean => path.endsWith('.json');
+
 async function readRaw(path: string): Promise<unknown> {
   try {
-    if (path.endsWith('.json')) return JSON.parse(await readFile(path, 'utf8'));
+    if (isJson(path)) return JSON.parse(await readFile(path, 'utf8'));
     return ((await import(pathToFileURL(path).href)) as { default?: unknown }).default;
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
@@ -35,8 +38,6 @@ export interface LoadOptions {
   untrusted?: boolean;
 }
 
-const CODE_CONFIG = /\.[cm]?[jt]s$/;
-
 export async function loadConfig(
   root: string,
   explicitPath?: string,
@@ -48,17 +49,17 @@ export async function loadConfig(
   if (explicitPath !== undefined) {
     path = resolve(root, explicitPath);
     if (!existsSync(path)) throw new ConfigError(`Config file not found: ${path}`);
-    if (untrusted && CODE_CONFIG.test(path)) {
+    if (untrusted && !isJson(path)) {
       throw new ConfigError(`Refusing to import ${path} with --untrusted; use a JSON config.`);
     }
   } else {
     const found = CONFIG_NAMES.map((n) => join(root, n)).filter((p) => existsSync(p));
     if (untrusted) {
-      for (const p of found.filter((f) => CODE_CONFIG.test(f))) {
+      for (const p of found.filter((f) => !isJson(f))) {
         warnings.push(`--untrusted: skipping ${p} (it would be imported)`);
       }
     }
-    path = found.find((p) => !untrusted || p.endsWith('.json')) ?? null;
+    path = found.find((p) => !untrusted || isJson(p)) ?? null;
   }
   if (path === null) return { config: configSchema.parse({}), path, warnings };
 
