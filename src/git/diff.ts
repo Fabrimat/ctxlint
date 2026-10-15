@@ -15,7 +15,7 @@ const REDIRECTING = [
   'GIT_ALTERNATE_OBJECT_DIRECTORIES',
 ];
 
-function clean(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function clean(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(env).filter(([k]) => !REDIRECTING.includes(k)));
 }
 

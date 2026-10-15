@@ -3,6 +3,7 @@ import { posix } from 'node:path';
 import { closest } from '../util/distance.js';
 import type { Check, CheckContext, CheckResult, Claim } from '../types.js';
 import { docDir, fail, pass, unknown } from './result.js';
+import { clean } from '../git/diff.js';
 
 /** Candidate repo-relative resolutions in priority order; empty when all escape the repo. */
 function candidates(claim: Claim): string[] {
@@ -23,6 +24,7 @@ function gitIgnored(root: string, paths: string[]): Promise<Set<string>> {
   return new Promise((resolve) => {
     const child = spawn('git', ['-C', root, 'check-ignore', '-z', '--stdin'], {
       stdio: ['pipe', 'pipe', 'ignore'],
+      env: clean(process.env),
     });
     let out = '';
     child.stdout.on('data', (d: Buffer) => (out += d.toString()));
