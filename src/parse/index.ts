@@ -2,16 +2,24 @@ import type { Code, InlineCode, Nodes, Text } from 'mdast';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmFromMarkdown } from 'mdast-util-gfm';
 import { gfm } from 'micromark-extension-gfm';
+import type { PluginCheck } from '../plugin/types.js';
 import type { Claim, ClaimKind, ClaimSource } from '../types.js';
 import { disabledRanges, isDisabled, markerOf, type Toggle } from './markers.js';
 import { inlinePath, linkPath, proseTokens, type PathParts } from './paths.js';
-import { logicalLines, parseShellLine, type Piece } from './shell.js';
+import { leadingBinary, logicalLines, parseShellLine, type Piece } from './shell.js';
 import { inlineSymbol } from './symbols.js';
 import { inlineVersion } from './versions.js';
 
 export interface ParseOptions {
   /** Also extract paths mentioned in plain prose (noisier; off by default). */
   prose?: boolean;
+  /**
+   * Plugin checks in config order. Their matchers take precedence over built-in extraction, and
+   * the first check that matches takes the claim (as `custom`, with `meta.check`).
+   */
+  matchers?: readonly Pick<PluginCheck, 'id' | 'match'>[];
+  /** HTML comment pairs (regular expression sources) whose content is not checked. */
+  ignoreRegions?: readonly { begin: string; end: string }[];
 }
 
 interface Pos {
@@ -75,6 +83,12 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
   const addPath = (parts: PathParts, pos: Pos, source: ClaimSource): void =>
     add('path', parts.value, pos, source, parts.meta);
 
+  const matchers = opts.matchers ?? [];
+  const adopted = new Map<string, string>();
+  for (const m of matchers) {
+    for (const bin of m.match.commands ?? []) if (!adopted.has(bin)) adopted.set(bin, m.id);
+  }
+
   function inlineCode(node: InlineCode): void {
     const start = node.position?.start.offset;
     if (start === undefined) return;
@@ -83,8 +97,19 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
     const lead = node.value.length - node.value.trimStart().length;
     const raw = src.slice(start + fence, node.position?.end.offset);
     const base = start + fence + Math.max(raw.indexOf(node.value), 0) + lead;
-    if (PACKAGE_MANAGER_COMMAND.test(code)) {
-      for (const c of parseShellLine(code)) {
+    const first = adopted.size > 0 ? leadingBinary(code) : undefined;
+    const bin = first !== undefined && adopted.has(first) ? first : undefined;
+    for (const m of matchers) {
+      if (m.match.inlineCode?.test(code)) {
+        return add('custom', code, posAt(base), 'inline-code', {
+          check: m.id,
+          matched: 'inline-code',
+        });
+      }
+      if (bin !== undefined && m.match.commands?.includes(bin)) break;
+    }
+    if (bin !== undefined || PACKAGE_MANAGER_COMMAND.test(code)) {
+      for (const c of parseShellLine(code, adopted)) {
         add(c.kind, c.value, posAt(base + c.index), 'inline-code', c.meta);
       }
       return;
@@ -97,11 +122,16 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
     if (symbol) add('symbol', symbol.value, posAt(base), 'inline-code', symbol.meta);
   }
 
-  function snippet(node: Code, lang: string, first: number): void {
+  /** Position of a fence's first content line. */
+  function blockPos(node: Code, first: number): Pos {
     const raw = lines[first] ?? '';
     const [head = ''] = node.value.split(/\r?\n/);
     const indent = raw.endsWith(head) ? raw.length - head.length : 0;
-    add('snippet', node.value, { line: first + 1, col: indent + 1 }, 'fence', {
+    return { line: first + 1, col: indent + 1 };
+  }
+
+  function snippet(node: Code, lang: string, first: number): void {
+    add('snippet', node.value, blockPos(node, first), 'fence', {
       lang,
       ...(node.meta ? { info: node.meta } : {}),
     });
@@ -111,6 +141,14 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
     const lang = node.lang?.toLowerCase();
     const first = node.position?.start.line;
     if (!lang || first === undefined) return;
+    const owner = matchers.find((m) => m.match.fences?.some((f) => f.toLowerCase() === lang));
+    if (owner) {
+      return add('custom', node.value, blockPos(node, first), 'fence', {
+        check: owner.id,
+        matched: 'fence',
+        lang,
+      });
+    }
     if (SNIPPET_LANGS.has(lang)) return snippet(node, lang, first);
     if (!FENCE_LANGS.has(lang)) return;
     const pieces: Piece[] = node.value.split(/\r?\n/).map((text, i) => {
@@ -119,16 +157,20 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
       return { text, line: first + 1 + i, col: indent + 1 };
     });
     for (const logical of logicalLines(pieces, CONSOLE_LANGS.has(lang))) {
-      for (const c of parseShellLine(logical.text)) {
+      for (const c of parseShellLine(logical.text, adopted)) {
         add(c.kind, c.value, logical.locate(c.index), 'fence', c.meta);
       }
     }
   }
 
   function link(url: string, node: Nodes): void {
-    const parts = linkPath(url);
     const start = node.position?.start;
-    if (parts && start) addPath(parts, { line: start.line, col: start.column }, 'link');
+    if (!start) return;
+    const pos = { line: start.line, col: start.column };
+    const owner = matchers.find((m) => m.match.links?.test(url));
+    if (owner) return add('custom', url, pos, 'link', { check: owner.id, matched: 'link' });
+    const parts = linkPath(url);
+    if (parts) addPath(parts, pos, 'link');
   }
 
   function prose(node: Text): void {

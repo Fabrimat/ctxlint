@@ -2,7 +2,7 @@ import { inlinePath } from './paths.js';
 import { packageSpec } from './versions.js';
 
 export interface Extracted {
-  kind: 'path' | 'script' | 'command' | 'version';
+  kind: 'path' | 'script' | 'command' | 'version' | 'custom';
   value: string;
   /** Offset of the claim text within the parsed line. */
   index: number;
@@ -12,6 +12,8 @@ export interface Extracted {
 interface Tok {
   text: string;
   at: number;
+  /** Offset just past the raw token. */
+  end: number;
   op: boolean;
 }
 
@@ -32,7 +34,7 @@ function tokenize(line: string): Tok[] {
     if (c === '#') break;
     const op = startsOperator(line, i);
     if (op) {
-      toks.push({ text: op, at: i, op: true });
+      toks.push({ text: op, at: i, end: i + op.length, op: true });
       i += op.length;
       continue;
     }
@@ -60,9 +62,16 @@ function tokenize(line: string): Tok[] {
         i++;
       }
     }
-    toks.push({ text, at, op: false });
+    toks.push({ text, at, end: Math.min(i, line.length), op: false });
   }
   return toks;
+}
+
+/** The words of a shell line (quotes removed), e.g. a plugin command's argv. */
+export function shellWords(line: string): string[] {
+  return tokenize(line)
+    .filter((t) => !t.op)
+    .map((t) => t.text);
 }
 
 function splitCommands(toks: Tok[]): Tok[][] {
@@ -257,13 +266,16 @@ function trimGroup(cmd: Tok[]): Tok[] {
   }
   const tail = toks.at(-1);
   if (tail) {
-    tail.text = tail.text.replace(/[)};]+$/, '');
-    if (!tail.text) toks.pop();
+    const bare = tail.text.replace(/[)};]+$/, '');
+    tail.end -= tail.text.length - bare.length;
+    tail.text = bare;
+    if (!bare) toks.pop();
   }
   return toks;
 }
 
-function classify(raw: Tok[]): Extracted[] {
+/** The command's binary (after env assignments, wrappers and Windows launcher suffixes). */
+function head(raw: Tok[]): { first: Tok; rest: Tok[]; name: string; last: Tok } | undefined {
   const cmd = trimGroup(raw);
   let k = 0;
   while (
@@ -272,11 +284,27 @@ function classify(raw: Tok[]): Extracted[] {
   )
     k++;
   const [first, ...rest] = cmd.slice(k);
-  if (!first) return [];
+  if (!first) return undefined;
   // `npm.cmd`, `bun.exe`: Windows launchers; a path such as ./run.ps1 keeps its extension.
   const name = first.text.includes('/')
     ? first.text
     : first.text.replace(/\.(?:cmd|exe|ps1)$/i, '');
+  return { first, rest, name, last: cmd.at(-1) as Tok };
+}
+
+/** Binary -> plugin check id that adopted it. */
+export type Adopted = ReadonlyMap<string, string>;
+
+function classify(raw: Tok[], line: string, adopted: Adopted): Extracted[] {
+  const h = head(raw);
+  if (!h) return [];
+  const { first, rest, name } = h;
+  const check = adopted.get(name);
+  if (check !== undefined) {
+    // The raw text from the binary to the end of its segment.
+    const value = line.slice(first.at, h.last.end);
+    return [{ kind: 'custom', value, index: first.at, meta: { check, matched: 'command' } }];
+  }
   if (NOT_COMMANDS.has(name) || name === 'cd') return [];
   switch (name) {
     case 'npm':
@@ -298,11 +326,22 @@ function classify(raw: Tok[]): Extracted[] {
   return BINARY_NAME.test(name) ? [{ kind: 'command', value: name, index: first.at }] : [];
 }
 
-/** Extracts script, command and path claims from one logical shell line. */
-export function parseShellLine(line: string): Extracted[] {
+const NONE: Adopted = new Map();
+
+/**
+ * Extracts script, command and path claims from one logical shell line, and `custom` claims for
+ * binaries a plugin adopted.
+ */
+export function parseShellLine(line: string, adopted: Adopted = NONE): Extracted[] {
   // Substitutions and heredocs hide the real command structure: precision over recall.
   if (/\$\(|`|<</.test(line)) return [];
-  return splitCommands(tokenize(line)).flatMap(classify);
+  return splitCommands(tokenize(line)).flatMap((cmd) => classify(cmd, line, adopted));
+}
+
+/** The binary of the first command of `line`, as `parseShellLine` sees it. */
+export function leadingBinary(line: string): string | undefined {
+  const [cmd] = splitCommands(tokenize(line));
+  return cmd && head(cmd)?.name;
 }
 
 export interface Piece {
