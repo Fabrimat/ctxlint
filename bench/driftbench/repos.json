@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "name": "zod",
+    "url": "https://github.com/colinhacks/zod",
+    "sha": "680d19f7d1e042e55934209caeb79bc843b94f44"
+  },
+  {
+    "name": "vitest",
+    "url": "https://github.com/vitest-dev/vitest",
+    "sha": "3a8289ac382ff72e7c33345b4847d839e9c3d676"
+  },
+  {
+    "name": "tanstack-query",
+    "url": "https://github.com/TanStack/query",
+    "sha": "ee47993724e5b71e65d9f38ae416367d2dd18395"
+  }
+]
