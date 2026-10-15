@@ -238,6 +238,15 @@ const { report } = await check({ root: process.cwd() });
 console.log(formatReport(report, 'text', { color: false, verbose: false }));
 ```
 
+## Machine-readable output
+
+`check --format json`, `blame --format json` and `history --format json|jsonl` follow the JSON Schemas in [`schema/`](schema) (shipped in the npm package, also exported as zod schemas: `reportSchema`, `blameSchema`, `historySchema`, `historyEpisodeSchema`).
+
+- Within a major version (`version: 1`) changes are additive only: new optional fields, new check ids (plugins add `<plugin>/<check>`), new claim kinds. Consumers must ignore unknown fields, so `checkId` and `kind` are plain strings.
+- Removing, renaming or retyping a field bumps `version` to 2 and adds a `-v2.json` file; the v1 file stays.
+- History episodes carry `v` instead of `version`, for historical reasons.
+- The published schemas allow additional properties, because consumers should tolerate new fields; ctxtruth's own tests use the strict zod versions, so an undocumented field fails the build.
+
 ## Design principles
 
 - **Deterministic first.** Every check in this release is plain static analysis: same repository, same result, no network.
