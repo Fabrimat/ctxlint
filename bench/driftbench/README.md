@@ -41,6 +41,10 @@ claims where one breaks open one episode.
 - `unknown` results (a claim a check could not verify) count as not failing for opening, and do
   not close an open episode.
 - The `commands` check is excluded: a historical checkout has no installed binaries.
+- Cloned repositories are never installed (no repository code runs), so checks that need
+  `node_modules` are mostly `unknown`: snippets, symbols resolved through dependency types, and
+  versions without a lockfile. Episodes therefore skew towards `paths`, `scripts`, repository
+  symbols and lockfile versions; report results per `check` rather than as one total.
 - Comparison is pairwise: an episode that opens and closes inside one commit is invisible, and a
   doc rename shows as one closed and one opened episode, both attributed to docs.
 - Episodes already open at the first walked commit are left-censored.
