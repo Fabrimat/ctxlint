@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { changedFiles, resolveBase } from '../../src/git/diff.js';
 import { withWorktree } from '../../src/git/worktree.js';
 import { makeTmpRepo } from '../helpers/tmp.js';
@@ -159,6 +159,25 @@ describe('withWorktree', () => {
       expect(existsSync(marker)).toBe(false);
     } finally {
       rmSync(marker, { force: true });
+    }
+  });
+
+  it('removes the worktree and re-raises on SIGINT', async () => {
+    const r = repo({ 'a.txt': 'a' });
+    const listeners = process.listenerCount('SIGINT');
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    try {
+      let seen = '';
+      await withWorktree(r.dir, head(r.dir), async (dir) => {
+        seen = dir;
+        process.emit('SIGINT', 'SIGINT');
+      });
+      expect(kill).toHaveBeenCalledWith(process.pid, 'SIGINT');
+      expect(existsSync(seen)).toBe(false);
+      expect(worktrees(r.dir)).toHaveLength(1);
+      expect(process.listenerCount('SIGINT')).toBe(listeners);
+    } finally {
+      kill.mockRestore();
     }
   });
 });
