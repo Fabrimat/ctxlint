@@ -3,7 +3,15 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmFromMarkdown } from 'mdast-util-gfm';
 import { gfm } from 'micromark-extension-gfm';
 import type { Claim, ClaimKind, ClaimSource } from '../types.js';
-import { disabledRanges, isDisabled, markerOf, type Toggle } from './markers.js';
+import {
+  disabledRanges,
+  isDisabled,
+  markerOf,
+  regionDelta,
+  regionRanges,
+  type IgnoreRegion,
+  type Toggle,
+} from './markers.js';
 import { inlinePath, linkPath, proseTokens, type PathParts } from './paths.js';
 import { logicalLines, parseShellLine, type Piece } from './shell.js';
 import { inlineSymbol } from './symbols.js';
@@ -12,6 +20,8 @@ import { inlineVersion } from './versions.js';
 export interface ParseOptions {
   /** Also extract paths mentioned in plain prose (noisier; off by default). */
   prose?: boolean;
+  /** Claims between a `begin` and an `end` HTML comment (nesting counted) are dropped. */
+  ignoreRegions?: IgnoreRegion[];
 }
 
 interface Pos {
@@ -44,6 +54,7 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
 
   const headings: { depth: number; text: string }[] = [];
   const toggles: Toggle[] = [];
+  const regionEvents: { delta: 1 | -1; line: number }[] = [];
   const claims: Claim[] = [];
 
   // ponytail: linear scan per lookup; use binary search if documents reach tens of thousands of lines.
@@ -152,6 +163,8 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
         if ((marker === 'disable' || marker === 'enable') && line !== undefined) {
           toggles.push({ marker, line });
         }
+        const delta = regionDelta(node.value, opts.ignoreRegions ?? []);
+        if (delta !== 0 && line !== undefined) regionEvents.push({ delta, line });
         return;
       }
       case 'inlineCode':
@@ -182,6 +195,6 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
   }
 
   visit(tree, false);
-  const ranges = disabledRanges(toggles);
+  const ranges = [...disabledRanges(toggles), ...regionRanges(regionEvents)];
   return claims.filter((c) => !isDisabled(c.line, ranges));
 }

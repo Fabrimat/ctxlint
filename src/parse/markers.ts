@@ -31,3 +31,31 @@ export function disabledRanges(toggles: readonly Toggle[]): [number, number][] {
 export function isDisabled(line: number, ranges: readonly [number, number][]): boolean {
   return ranges.some(([from, to]) => line > from && line < to);
 }
+
+export interface IgnoreRegion {
+  begin: RegExp;
+  end: RegExp;
+}
+
+/** +1 when the HTML matches a region's `begin`, -1 when it matches an `end`, else 0. */
+export function regionDelta(html: string, regions: readonly IgnoreRegion[]): 1 | -1 | 0 {
+  const v = html.trim();
+  if (regions.some((r) => r.begin.test(v))) return 1;
+  return regions.some((r) => r.end.test(v)) ? -1 : 0;
+}
+
+/** Turns begin/end lines (in document order) into [from, to] ranges via a floored depth counter. */
+export function regionRanges(
+  events: readonly { delta: 1 | -1; line: number }[],
+): [number, number][] {
+  const ranges: [number, number][] = [];
+  let depth = 0;
+  let from = 0;
+  for (const e of events) {
+    if (e.delta === 1) {
+      if (depth++ === 0) from = e.line;
+    } else if (depth > 0 && --depth === 0) ranges.push([from, e.line]);
+  }
+  if (depth > 0) ranges.push([from, Infinity]);
+  return ranges;
+}
