@@ -248,7 +248,9 @@ export async function history(opts: HistoryOptions): Promise<HistoryResult> {
       throw new Error(`--since \`${opts.since}\` is not on the first-parent chain of HEAD`);
     chain = chain.slice(at + 1);
   }
-  if (opts.maxCommits !== undefined) chain = chain.slice(-opts.maxCommits);
+  // 100 commits unless the range is bounded by --since; an explicit cap always applies.
+  const cap = opts.maxCommits ?? (opts.since === undefined ? 100 : undefined);
+  if (cap !== undefined) chain = chain.slice(-cap);
   const first = chain[0];
   if (first === undefined) throw new Error('no commits to walk');
 

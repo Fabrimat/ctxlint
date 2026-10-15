@@ -111,6 +111,18 @@ describe('ctxtruth history', { timeout: 30_000 }, () => {
     expect(eps[0]).toMatchObject({ value: 'src/ghost.ts', cause: 'docs' });
   });
 
+  it('--since walks the whole range, and --max-commits still caps it', async () => {
+    const repo = setup();
+    const root = repo.git('rev-list', '--max-parents=0', 'HEAD').toString().trim();
+    const all = await run(['history', '--format', 'json', '--since', root], repo.dir);
+    expect(JSON.parse(all.out).commits).toBe(4);
+    const capped = await run(
+      ['history', '--format', 'json', '--since', root, '--max-commits', '2'],
+      repo.dir,
+    );
+    expect(JSON.parse(capped.out).commits).toBe(2);
+  });
+
   it('prints a text summary and json', async () => {
     const repo = setup();
     const text = await run(['history'], repo.dir);

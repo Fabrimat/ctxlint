@@ -151,7 +151,10 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         .default('text'),
     )
     .option('--output <file>', 'write the report to a file instead of stdout')
-    .option('--max-commits <n>', 'walk only the most recent n commits', '100')
+    .option(
+      '--max-commits <n>',
+      'walk only the most recent n commits (default: 100, unless --since is given)',
+    )
     .option('--since <ref>', 'walk the commits after this ref (exclusive)')
     .option('--checks <ids>', 'comma-separated checks to run (default: all enabled but commands)')
     .option('--repo-name <name>', 'repository name in the output (default: the root folder name)')
@@ -162,15 +165,15 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
       async (flags: {
         format: HistoryFormat;
         output?: string;
-        maxCommits: string;
+        maxCommits?: string;
         since?: string;
         checks?: string;
         repoName?: string;
         config?: string;
         root?: string;
       }) => {
-        const maxCommits = Number(flags.maxCommits);
-        if (!Number.isInteger(maxCommits) || maxCommits < 1) {
+        const maxCommits = flags.maxCommits === undefined ? undefined : Number(flags.maxCommits);
+        if (maxCommits !== undefined && (!Number.isInteger(maxCommits) || maxCommits < 1)) {
           throw new Error('--max-commits must be a positive integer');
         }
         const { history } = await import('./history.js');
@@ -178,7 +181,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         const tty = process.stderr.isTTY;
         const result = await history({
           root: resolve(io.cwd, flags.root ?? '.'),
-          maxCommits,
+          ...(maxCommits !== undefined && { maxCommits }),
           ...(flags.config !== undefined && { configPath: resolve(io.cwd, flags.config) }),
           ...(flags.since !== undefined && { since: flags.since }),
           ...(flags.checks !== undefined && {

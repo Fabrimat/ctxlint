@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 interface Entry {
   name: string;
@@ -28,8 +28,15 @@ mkdirSync(join(here, 'data'), { recursive: true });
 mkdirSync(cache, { recursive: true });
 
 for (const e of entries) {
+  if (!/^[A-Za-z0-9._-]+$/.test(e.name) || e.name === '.' || e.name === '..') {
+    throw new Error(`bad repo name: ${e.name}`);
+  }
+  if (!/^[0-9a-f]{7,64}$/i.test(e.sha)) throw new Error(`bad sha for ${e.name}: ${e.sha}`);
+  if (e.root !== undefined && (isAbsolute(e.root) || e.root.split(/[\\/]/).includes('..'))) {
+    throw new Error(`bad root for ${e.name}: ${e.root}`);
+  }
   const dir = join(cache, e.name);
-  if (!existsSync(dir)) git(cache, 'clone', '--quiet', '--filter=blob:none', e.url, dir);
+  if (!existsSync(dir)) git(cache, 'clone', '--quiet', '--filter=blob:none', '--', e.url, dir);
   else git(dir, 'fetch', '--quiet', 'origin');
   git(dir, 'checkout', '--quiet', '--detach', e.sha);
   const args = [cli, 'history', '--root', e.root ? join(dir, e.root) : dir, '--repo-name', e.name];
