@@ -27,9 +27,19 @@ async function readRaw(path: string): Promise<unknown> {
   }
 }
 
+export interface LoadOptions {
+  /**
+   * The repository is untrusted: never import its config or plugin code (only a JSON config is
+   * read, and its `plugins` are ignored).
+   */
+  untrusted?: boolean;
+}
+
 export async function loadConfig(
   root: string,
   explicitPath?: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _opts: LoadOptions = {},
 ): Promise<{ config: Config; path: string | null }> {
   let path: string | null;
   if (explicitPath !== undefined) {

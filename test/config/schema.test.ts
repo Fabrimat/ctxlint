@@ -24,6 +24,8 @@ describe('configSchema', () => {
         snippets: 'error',
         versions: 'warning',
       },
+      plugins: [],
+      ignoreRegions: [],
       prose: false,
       failOn: 'error',
     });
@@ -55,5 +57,21 @@ describe('configSchema', () => {
   it('defineConfig is the identity', () => {
     const c = { prose: true };
     expect(defineConfig(c)).toBe(c);
+  });
+});
+
+describe('plugin config', () => {
+  it('accepts namespaced plugin rules and rejects unknown keys', () => {
+    expect(configSchema.parse({ rules: { 'bedrock/ids': 'error' } }).rules['bedrock/ids']).toBe(
+      'error',
+    );
+    expect(configSchema.safeParse({ rules: { path: 'off' } }).success).toBe(false);
+  });
+
+  it('accepts plugins with options and validates ignoreRegions regexes', () => {
+    expect(configSchema.parse({ plugins: ['a', ['./b.js', { x: 1 }]] }).plugins).toHaveLength(2);
+    expect(configSchema.safeParse({ ignoreRegions: [{ begin: '(', end: 'x' }] }).success).toBe(
+      false,
+    );
   });
 });

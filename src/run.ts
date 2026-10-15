@@ -29,6 +29,8 @@ export interface CheckOptions {
   changedOnly?: boolean;
   /** Only report failures that are new since `base` (runs a second check on the base commit). */
   newOnly?: boolean;
+  /** The repository is untrusted: never import its config or plugin code. */
+  untrusted?: boolean;
 }
 
 async function toolVersion(): Promise<string> {
@@ -74,7 +76,7 @@ export async function evaluate(
   const results: CheckResult[] = [];
   for (const c of checks) {
     const level = config.rules[c.id];
-    if (level === 'off') continue;
+    if (level === undefined || level === 'off') continue;
     const mine = claims.filter((claim) => c.kinds.includes(claim.kind));
     if (mine.length > 0) results.push(...(await c.run(mine, { index, severity: level })));
   }

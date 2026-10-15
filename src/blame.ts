@@ -159,7 +159,10 @@ async function changesBetween(
   return changes;
 }
 
-export type BlameOptions = Pick<CheckOptions, 'root' | 'paths' | 'configPath' | 'cwd'>;
+export type BlameOptions = Pick<
+  CheckOptions,
+  'root' | 'paths' | 'configPath' | 'cwd' | 'untrusted'
+>;
 
 /**
  * For every failing claim of the working tree, finds the commit that made it false. The head

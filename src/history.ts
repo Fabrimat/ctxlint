@@ -206,6 +206,8 @@ export interface HistoryOptions {
   /** Run only these checks. */
   checks?: string[];
   repoName?: string;
+  /** The repository is untrusted: never import its config or plugin code. */
+  untrusted?: boolean;
   onProgress?: (done: number, total: number) => void;
 }
 

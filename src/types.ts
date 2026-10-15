@@ -5,7 +5,8 @@
  * Positions are 1-based and point at the claim text itself, not its Markdown node.
  */
 
-export type ClaimKind = 'path' | 'script' | 'command' | 'symbol' | 'snippet' | 'version';
+/** `custom` claims are extracted for a plugin check, named in `meta.check`. */
+export type ClaimKind = 'path' | 'script' | 'command' | 'symbol' | 'snippet' | 'version' | 'custom';
 
 /** Where in the Markdown the claim was found. Drives default severity: prose is opt-in. */
 export type ClaimSource = 'inline-code' | 'link' | 'fence' | 'prose';
@@ -28,7 +29,10 @@ export interface Claim {
 export type Severity = 'error' | 'warning';
 export type RuleLevel = Severity | 'off';
 
-export type CheckId = 'paths' | 'scripts' | 'commands' | 'symbols' | 'snippets' | 'versions';
+export type BuiltinCheckId = 'paths' | 'scripts' | 'commands' | 'symbols' | 'snippets' | 'versions';
+
+/** A built-in check id, or a plugin check id namespaced as `<plugin>/<check>`. */
+export type CheckId = string;
 
 export interface Finding {
   file: string;
@@ -122,6 +126,11 @@ export interface Check {
   id: CheckId;
   /** Claim kinds this check consumes. */
   kinds: readonly ClaimKind[];
+  /**
+   * The verdict depends on tools or state outside the checkout (installed binaries, a CLI on
+   * PATH): at a past commit it cannot be reproduced, so comparisons treat it as not comparable.
+   */
+  environment?: boolean;
   run(claims: readonly Claim[], ctx: CheckContext): CheckResult[] | Promise<CheckResult[]>;
 }
 

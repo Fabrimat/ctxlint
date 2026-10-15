@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { fingerprint, type CheckId, type Report } from '../types.js';
+import { fingerprint, type BuiltinCheckId, type CheckId, type Report } from '../types.js';
 import { reportedResults } from './build.js';
 import type { FormatOptions } from './index.js';
 
 const HELP_URI = 'https://github.com/Fabrimat/ctxtruth#what-it-checks';
 
-const DESCRIPTIONS: Record<CheckId, string> = {
+const DESCRIPTIONS: Record<BuiltinCheckId, string> = {
   paths: 'Documented file or directory does not exist',
   scripts: 'Documented package script does not exist',
   commands: 'Documented command cannot be resolved',
@@ -36,7 +36,7 @@ export function formatSarif(report: Report, _opts: FormatOptions): string {
             informationUri: 'https://github.com/Fabrimat/ctxtruth',
             rules: ids.map((id) => ({
               id,
-              shortDescription: { text: DESCRIPTIONS[id] },
+              shortDescription: { text: DESCRIPTIONS[id as BuiltinCheckId] ?? id },
               helpUri: HELP_URI,
               defaultConfiguration: { level: level(id) },
             })),
