@@ -19,10 +19,15 @@ function commitRef(b: BlameFinding): string {
   return c ? `${short(c.sha)} (${day(c.date)}, "${c.subject}")` : '';
 }
 
+const UNDETERMINED =
+  'could not be traced through history (the check cannot verify it at past commits)';
+const UNCONFIRMED = ' (earlier state not verifiable)';
+
 function agentLine(b: BlameFinding): string {
   const flat = b.value.replace(/\s+/g, ' ');
   const shown = flat.length > 60 ? `${flat.slice(0, 57)}...` : flat;
   const head = `${loc(b)} [${b.finding.checkId}] \`${shown}\``;
+  if (b.cause === 'undetermined') return `${head} ${UNDETERMINED}`;
   if (b.cause === 'uncommitted') return `${head} broken by uncommitted changes`;
   if (b.cause === 'stale-when-written') {
     return b.commit
@@ -32,7 +37,7 @@ function agentLine(b: BlameFinding): string {
   const hint = b.changes?.map((c) =>
     c.status === 'renamed' ? `renamed to \`${c.to}\` there` : 'deleted there',
   );
-  return `${head} broken by ${commitRef(b)}${hint && hint.length > 0 ? ` — ${hint.join(', ')}` : ''}`;
+  return `${head} broken by ${commitRef(b)}${hint && hint.length > 0 ? ` — ${hint.join(', ')}` : ''}${b.confirmedBefore === false ? UNCONFIRMED : ''}`;
 }
 
 function formatAgent(report: BlameReport): string {
@@ -48,7 +53,11 @@ function textLines(b: BlameFinding): string[] {
     `${short(c.sha)}  ${day(c.date)}  ${c.author}  ${c.subject}`;
   const ago = b.commitsAgo === undefined ? '' : ` (${plural(b.commitsAgo, 'commit')} ago)`;
   const lines = [`  ${where}  [${b.finding.checkId}] ${b.finding.message}`];
-  if (b.cause === 'broken-by' && b.commit) lines.push(`      broken by ${who(b.commit)}${ago}`);
+  if (b.cause === 'broken-by' && b.commit) {
+    lines.push(
+      `      broken by ${who(b.commit)}${ago}${b.confirmedBefore === false ? UNCONFIRMED : ''}`,
+    );
+  } else if (b.cause === 'undetermined') lines.push(`      ${UNDETERMINED}`);
   else if (b.cause === 'stale-when-written' && b.commit) {
     lines.push(`      wrong since written in ${who(b.commit)}${ago}`);
   } else if (b.cause === 'stale-when-written') {

@@ -46,6 +46,14 @@ describe('multiBisect', () => {
     expect((await multiBisect([{ id: 0, lo: 4 }], 9, evaluator)).get(0)).toBe(4);
   });
 
+  it('treats unknown as not failing', async () => {
+    const evaluator: Evaluator = async (index, ids) =>
+      new Map(ids.map((id) => [id, index >= 6 ? 'fail' : index >= 2 ? 'unknown' : 'ok']));
+    expect((await multiBisect([{ id: 0, lo: 0 }], 9, evaluator)).get(0)).toBe(6);
+    const allUnknown: Evaluator = async (_i, ids) => new Map(ids.map((id) => [id, 'unknown']));
+    expect((await multiBisect([{ id: 0, lo: 0 }], 9, allUnknown)).get(0)).toBeNull();
+  });
+
   it('returns null when the claim passes at the last commit', async () => {
     const { evaluator, calls } = fake({});
     expect((await multiBisect([{ id: 0, lo: 0 }], 9, evaluator)).get(0)).toBeNull();

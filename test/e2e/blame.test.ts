@@ -96,6 +96,7 @@ describe('blame', () => {
         cause: 'broken-by',
         commit: { subject: 'three' },
         commitsAgo: 3,
+        confirmedBefore: true,
         changes: [{ status: 'renamed', from: 'src/old.ts', to: 'src/new.ts' }],
       });
       expect(by['src/old.ts']?.commit?.date.startsWith('2026-01-03')).toBe(true);
@@ -154,6 +155,30 @@ describe('blame', () => {
       const shallow = await run(clone.dir, []);
       expect(shallow.code).toBe(2);
       expect(shallow.err).toContain('git fetch --unshallow');
+    },
+    SLOW,
+  );
+});
+
+describe('blame on claims the check cannot verify in the past', () => {
+  it(
+    'reports undetermined rather than uncommitted',
+    async () => {
+      const r = makeTmpRepo(
+        {
+          'package.json': JSON.stringify({ name: 'x', dependencies: { zod: '^4.1.0' } }),
+          'AGENTS.md': 'Uses `zod@3` for validation.\n',
+        },
+        { git: true },
+      );
+      repos.push(r);
+      r.git('add', '-A');
+      r.git('commit', '-q', '-m', 'one');
+      const report = await blame({ root: r.dir });
+      expect(report.findings).toHaveLength(1);
+      expect(report.findings[0]).toMatchObject({ cause: 'undetermined' });
+      const agent = await run(r.dir, ['--format', 'agent']);
+      expect(agent.out).toContain('could not be traced through history');
     },
     SLOW,
   );

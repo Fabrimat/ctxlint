@@ -8,7 +8,7 @@ import { buildRepoIndex } from './index/index.js';
 import { reportedResults } from './report/build.js';
 import { fingerprint, type Finding } from './types.js';
 
-export type BlameCause = 'broken-by' | 'stale-when-written' | 'uncommitted';
+export type BlameCause = 'broken-by' | 'stale-when-written' | 'uncommitted' | 'undetermined';
 
 export interface BlameChange {
   status: 'renamed' | 'deleted';
@@ -27,6 +27,11 @@ export interface BlameFinding {
   /** `broken-by`: the commit that made the claim false. `stale-when-written`: the writing commit. */
   commit?: CommitInfo;
   commitsAgo?: number;
+  /**
+   * `broken-by`: whether the claim was confirmed true at the commit before `commit`. False when it
+   * was only unknown there, so the real break may be earlier.
+   */
+  confirmedBefore?: boolean;
   /** Files the claim relied on that `commit` renamed or deleted. */
   changes?: BlameChange[];
 }
@@ -39,7 +44,8 @@ export interface BlameReport {
   durationMs: number;
 }
 
-export type Verdict = 'fail' | 'ok';
+/** `unknown`: the check cannot verify the claim at that commit. The search treats it as ok. */
+export type Verdict = 'fail' | 'ok' | 'unknown';
 /** Verdicts for `ids` against the code at chain commit `index`. */
 export type Evaluator = (index: number, ids: number[]) => Promise<Map<number, Verdict>>;
 
@@ -184,18 +190,19 @@ export async function blame(opts: BlameOptions): Promise<BlameReport> {
   const relied = new Map<string, ReadonlySet<string>>();
   let probes = 0;
 
-  const { first, stale } = await withWorktree(
+  const { first, stale, atHead } = await withWorktree(
     root,
     chain[last] as string,
     async (dir, checkout) => {
       let current = chain[last] as string;
+      const atHead = new Map<number, Verdict>();
       const probe = async (sha: string, ids: number[]): Promise<Map<number, Verdict>> => {
         probes++;
         if (sha !== current) {
           await checkout(sha);
           current = sha;
         }
-        const verdicts = new Map<number, Verdict>(ids.map((id) => [id, 'ok']));
+        const verdicts = new Map<number, Verdict>(ids.map((id) => [id, 'unknown']));
         const at = join(dir, prefix);
         if (!existsSync(at)) return verdicts;
         const rs = await evaluate(
@@ -207,8 +214,12 @@ export async function blame(opts: BlameOptions): Promise<BlameReport> {
         for (const id of ids) {
           const r = byFp.get(fps[id] as string);
           if (r?.status === 'fail') verdicts.set(id, 'fail');
-          else if (r?.status === 'pass') relied.set(`${sha}\0${id}`, new Set(r.resolvedFiles));
+          else if (r?.status === 'pass') {
+            verdicts.set(id, 'ok');
+            relied.set(`${sha}\0${id}`, new Set(r.resolvedFiles));
+          }
         }
+        if (sha === chain[last]) for (const [id, v] of verdicts) atHead.set(id, v);
         return verdicts;
       };
 
@@ -240,7 +251,7 @@ export async function blame(opts: BlameOptions): Promise<BlameReport> {
       }
       for (const [p, ids] of parents) await probe(p, ids);
 
-      return { first: found, stale: early };
+      return { first: found, stale: early, atHead };
     },
   );
 
@@ -260,14 +271,22 @@ export async function blame(opts: BlameOptions): Promise<BlameReport> {
     }
     const idx = first.get(id) ?? null;
     if (idx === null || w === null) {
-      findings.push({ ...base, cause: 'uncommitted' });
+      // Only a confirmed pass at HEAD proves the working tree alone broke the claim.
+      const cause = atHead.get(id) === 'ok' ? 'uncommitted' : 'undetermined';
+      findings.push({ ...base, cause });
       continue;
     }
     const sha = chain[idx] as string;
     const commit = await info(sha);
-    const entry: BlameFinding = { ...base, cause: 'broken-by', commit, commitsAgo: last - idx };
-    const files = relied.get(`${chain[idx - 1]}\0${id}`);
-    if (idx > 0 && files) {
+    const files = idx > 0 ? relied.get(`${chain[idx - 1]}\0${id}`) : undefined;
+    const entry: BlameFinding = {
+      ...base,
+      cause: 'broken-by',
+      commit,
+      commitsAgo: last - idx,
+      confirmedBefore: idx === 0 || files !== undefined,
+    };
+    if (files) {
       const changes = await changesBetween(root, chain[idx - 1] as string, sha, files);
       if (changes.length > 0) entry.changes = changes;
     }
