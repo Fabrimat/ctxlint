@@ -33,6 +33,7 @@
   },
   "files": [
     "dist",
+    "schema",
     "!dist/**/*.test.*"
   ],
   "engines": {
@@ -46,6 +47,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "schema": "node scripts/schema.ts",
     "dogfood": "node dist/cli.js check"
   },
   "dependencies": {

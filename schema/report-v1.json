@@ -1,0 +1,379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Fabrimat/ctxtruth/schema/report-v1.json",
+  "title": "ctxtruth check report",
+  "description": "Output of `ctxtruth check --format json`.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "tool": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "freshness": {
+            "description": "pass / (pass + fail); null if nothing verifiable.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "claim": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "description": "Built-in: path, script, command, symbol, snippet, version, custom. More kinds may be added."
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Normalised claim text."
+                    },
+                    "file": {
+                      "type": "string",
+                      "description": "Repo-relative POSIX path of the Markdown file."
+                    },
+                    "line": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "1-based."
+                    },
+                    "col": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "1-based."
+                    },
+                    "section": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Heading path of the enclosing section."
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "inline-code",
+                        "link",
+                        "fence",
+                        "prose"
+                      ]
+                    },
+                    "meta": {
+                      "description": "Kind-specific extra data.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "value",
+                    "file",
+                    "line",
+                    "col",
+                    "section",
+                    "source"
+                  ]
+                },
+                "checkId": {
+                  "type": "string",
+                  "description": "Built-in: paths, scripts, commands, symbols, snippets, versions. Plugin checks are namespaced `<plugin>/<check>`."
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pass",
+                    "fail",
+                    "unknown"
+                  ]
+                },
+                "reason": {
+                  "description": "Present when status is `unknown`.",
+                  "type": "string"
+                },
+                "finding": {
+                  "description": "Present when status is `fail`.",
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "type": "string"
+                    },
+                    "line": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "col": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "checkId": {
+                      "type": "string",
+                      "description": "Built-in: paths, scripts, commands, symbols, snippets, versions. Plugin checks are namespaced `<plugin>/<check>`."
+                    },
+                    "severity": {
+                      "type": "string",
+                      "enum": [
+                        "error",
+                        "warning"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "suggestion": {
+                      "description": "Concrete replacement text, when obvious.",
+                      "type": "string"
+                    },
+                    "introducedBy": {
+                      "description": "Only when compared with a base ref: what made the claim false.",
+                      "type": "string",
+                      "enum": [
+                        "docs",
+                        "code"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "file",
+                    "line",
+                    "col",
+                    "checkId",
+                    "severity",
+                    "message"
+                  ]
+                },
+                "resolvedFiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Repo-relative code files the claim depends on."
+                },
+                "baseline": {
+                  "description": "Only on failing results with `--new-only`.",
+                  "type": "string",
+                  "enum": [
+                    "new",
+                    "existing",
+                    "not-comparable"
+                  ]
+                }
+              },
+              "required": [
+                "claim",
+                "checkId",
+                "status",
+                "resolvedFiles"
+              ]
+            }
+          }
+        },
+        "required": [
+          "file",
+          "freshness",
+          "results"
+        ]
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "col": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "checkId": {
+            "type": "string",
+            "description": "Built-in: paths, scripts, commands, symbols, snippets, versions. Plugin checks are namespaced `<plugin>/<check>`."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "suggestion": {
+            "description": "Concrete replacement text, when obvious.",
+            "type": "string"
+          },
+          "introducedBy": {
+            "description": "Only when compared with a base ref: what made the claim false.",
+            "type": "string",
+            "enum": [
+              "docs",
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "file",
+          "line",
+          "col",
+          "checkId",
+          "severity",
+          "message"
+        ]
+      },
+      "description": "Reported findings, sorted by file, line, col."
+    },
+    "comparison": {
+      "description": "Present when compared with a base ref.",
+      "type": "object",
+      "properties": {
+        "base": {
+          "type": "string",
+          "description": "The base ref as given."
+        },
+        "baseSha": {
+          "type": "string",
+          "description": "The merge base commit."
+        },
+        "introduced": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "existing": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "fixed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "notComparable": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "base",
+        "baseSha",
+        "introduced",
+        "existing",
+        "fixed",
+        "notComparable"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "claims": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "pass": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "fail": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "unknown": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "freshness": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "durationMs": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "files",
+        "claims",
+        "pass",
+        "fail",
+        "unknown",
+        "errors",
+        "warnings",
+        "freshness",
+        "durationMs"
+      ]
+    }
+  },
+  "required": [
+    "version",
+    "tool",
+    "files",
+    "findings",
+    "summary"
+  ]
+}

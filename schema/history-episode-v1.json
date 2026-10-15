@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Fabrimat/ctxtruth/schema/history-episode-v1.json",
+  "title": "ctxtruth history episode",
+  "description": "One line of `ctxtruth history --format jsonl`.",
+  "type": "object",
+  "properties": {
+    "v": {
+      "type": "number",
+      "const": 1,
+      "description": "Episodes use `v`, not `version`, for historical reasons."
+    },
+    "repo": {
+      "type": "string"
+    },
+    "check": {
+      "type": "string",
+      "description": "Built-in: paths, scripts, symbols, snippets, versions. Or `<plugin>/<check>`."
+    },
+    "kind": {
+      "type": "string",
+      "description": "Claim kind. More kinds may be added."
+    },
+    "file": {
+      "type": "string"
+    },
+    "value": {
+      "type": "string"
+    },
+    "section": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "message": {
+      "type": "string"
+    },
+    "suggestion": {
+      "type": "string"
+    },
+    "openedAt": {
+      "type": "object",
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "description": "Author date, ISO 8601."
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha",
+        "date",
+        "subject"
+      ]
+    },
+    "cause": {
+      "type": "string",
+      "enum": [
+        "code",
+        "docs",
+        "unknown"
+      ],
+      "description": "`unknown`: already failing at the start."
+    },
+    "closedAt": {
+      "type": "object",
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "description": "Author date, ISO 8601."
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha",
+        "date",
+        "subject"
+      ]
+    },
+    "resolution": {
+      "type": "string",
+      "enum": [
+        "code",
+        "docs"
+      ]
+    },
+    "commitsOpen": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "daysOpen": {
+      "type": "number",
+      "description": "Until `closedAt`, else until the last walked commit."
+    },
+    "censored": {
+      "type": "boolean",
+      "description": "Already failing when the walk started."
+    }
+  },
+  "required": [
+    "v",
+    "repo",
+    "check",
+    "kind",
+    "file",
+    "value",
+    "section",
+    "message",
+    "openedAt",
+    "cause",
+    "commitsOpen",
+    "daysOpen",
+    "censored"
+  ]
+}

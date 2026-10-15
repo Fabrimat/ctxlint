@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Fabrimat/ctxtruth/schema/blame-v1.json",
+  "title": "ctxtruth blame report",
+  "description": "Output of `ctxtruth blame --format json`.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "col": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "checkId": {
+                "type": "string",
+                "description": "Built-in: paths, scripts, commands, symbols, snippets, versions. Plugin checks are namespaced `<plugin>/<check>`."
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "error",
+                  "warning"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "suggestion": {
+                "description": "Concrete replacement text, when obvious.",
+                "type": "string"
+              },
+              "introducedBy": {
+                "description": "Only when compared with a base ref: what made the claim false.",
+                "type": "string",
+                "enum": [
+                  "docs",
+                  "code"
+                ]
+              }
+            },
+            "required": [
+              "file",
+              "line",
+              "col",
+              "checkId",
+              "severity",
+              "message"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "description": "The claim text."
+          },
+          "written": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "sha": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "Author date, ISO 8601."
+                  },
+                  "author": {
+                    "type": "string"
+                  },
+                  "subject": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sha",
+                  "date",
+                  "author",
+                  "subject"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Commit that wrote the doc line; null if uncommitted."
+          },
+          "cause": {
+            "type": "string",
+            "enum": [
+              "broken-by",
+              "stale-when-written",
+              "uncommitted",
+              "undetermined"
+            ]
+          },
+          "commit": {
+            "description": "`broken-by`: the commit that broke the claim. `stale-when-written`: the writer.",
+            "type": "object",
+            "properties": {
+              "sha": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "description": "Author date, ISO 8601."
+              },
+              "author": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sha",
+              "date",
+              "author",
+              "subject"
+            ]
+          },
+          "commitsAgo": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "confirmedBefore": {
+            "description": "`broken-by`: false when the claim was only unknown before `commit`.",
+            "type": "boolean"
+          },
+          "changes": {
+            "description": "Files the claim relied on that `commit` renamed or deleted.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "renamed",
+                    "deleted"
+                  ]
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "description": "New path of a rename.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "from"
+              ]
+            }
+          }
+        },
+        "required": [
+          "finding",
+          "value",
+          "written",
+          "cause"
+        ]
+      }
+    },
+    "probes": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "description": "Commits evaluated."
+    },
+    "durationMs": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "version",
+    "findings",
+    "probes",
+    "durationMs"
+  ]
+}
