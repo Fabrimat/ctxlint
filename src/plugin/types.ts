@@ -56,13 +56,15 @@ export type Verdict =
   | { status: 'fail'; message: string; suggestion?: string; resolvedFiles?: string[] }
   | { status: 'unknown'; reason: string };
 
+export type PluginIndex = Readonly<Pick<RepoIndex, 'files' | 'packages'>>;
+
 export interface PluginContext {
   /** Absolute root of the checkout being checked (may be a temporary worktree of a past commit). */
   root: string;
   /** The checkout is a past commit (no installed dependencies, no build output). */
   pastCommit: boolean;
-  /** Read-only. */
-  index: RepoIndex;
+  /** Files and `package.json` packages of the checkout. Read-only: built-in checks share it. */
+  index: PluginIndex;
   /** Reads a repo-relative file; undefined when missing. Throws on paths outside `root`. */
   readFile(path: string): Promise<string | undefined>;
   /** The plugin's options from config: `['pkg', { ... }]`. */

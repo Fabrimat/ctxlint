@@ -12,5 +12,6 @@ export type {
   PluginCheck,
   PluginClaim,
   PluginContext,
+  PluginIndex,
   Verdict,
 } from './plugin/types.js';

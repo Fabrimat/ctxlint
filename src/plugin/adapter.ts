@@ -68,7 +68,7 @@ export function adapt(plugin: string, check: PluginCheck, options: unknown): Che
           {
             root: ctx.index.root,
             pastCommit,
-            index: ctx.index,
+            index: { files: ctx.index.files, packages: ctx.index.packages },
             readFile: reader(ctx.index.root),
             options,
           },

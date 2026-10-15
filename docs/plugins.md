@@ -63,7 +63,7 @@ The context passed to `verify`:
 
 - `root`: the absolute root of the checkout being checked. It may be a temporary worktree of a past commit (`--new-only`, `blame`, `history`).
 - `pastCommit`: true when the checkout is a past commit, which has no installed dependencies or build output.
-- `index`: the repository index (files and packages). Treat it as read-only.
+- `index`: `files` (`files`, `hasFile`, `hasDir`, `findByBasename`) and `packages` (every `package.json`, with scripts, dependencies and installed binaries) of the checkout. Do not modify it: built-in checks share it.
 - `readFile(path)`: reads a repo-relative file, or returns `undefined` when it is missing. It throws for paths outside `root`; that guards against mix-ups and is not a sandbox.
 - `options`: the second element of the plugin's config entry.
 
@@ -77,7 +77,7 @@ A check turned `off` in `rules` still takes its claims; they are simply not chec
 - `inlineCode`: a regular expression searched in the trimmed inline code. The capture groups reach `verify` as `groups` (an unmatched group is `''`).
 - `links`: a regular expression searched in a link, image or definition URL, with `groups` as above.
 - `fences`: fence languages, compared case-insensitively. The whole block is one claim, with `lang`.
-- `commands`: binary names. In shell fences, and in inline code that starts with the binary, the command becomes a claim whose value runs from the binary to the end of its `&&`, `||`, `;` or `|` segment, with its words in `argv`. Environment assignments, `sudo` and Windows suffixes such as `.cmd` are skipped first, as for built-in commands. An adopted binary is not also a built-in `commands` claim.
+- `commands`: binary names. In shell fences, and in inline code that starts with the binary, the command becomes a claim whose value runs from the binary to the end of its `&&`, `||`, `;` or `|` segment, with its words in `argv`. Environment assignments, `sudo` and Windows suffixes such as `.cmd` are skipped first, as for built-in commands. An adopted binary is not also a built-in claim: adopting `npm`, `pnpm` or `yarn` takes over the `scripts` and `versions` claims of those lines too.
 
 Regular expressions with the `g` or `y` flag are refused at load: they keep state between calls.
 A finding's identity across commits is its check id, doc file, kind and claim value, so keep claim values stable.
@@ -86,7 +86,7 @@ A finding's identity across commits is its check id, doc file, kind and claim va
 
 Set `environment: true` on a check whose verdict depends on anything outside the checkout: a CLI on `PATH`, installed tools, a network service.
 At a past commit ctxtruth does not call `verify` for it and every claim is unknown, because the past environment cannot be reproduced.
-In practice such a check never makes a `--new-only` finding new (it is not comparable), `blame` reports its findings as undetermined, and `history` records no episodes for it.
+In practice, with `--new-only` a failing claim that already existed at the base is not comparable and is not reported, while a claim the change added is still reported; `blame` reports its findings as undetermined, and `history` records no episodes for it.
 
 A check that reads only files of the checkout through `ctx.readFile` must not set it: it then works at past commits too.
 
@@ -96,6 +96,7 @@ A check that reads only files of the checkout through `ctx.readFile` must not se
 - Do not cache per-repository state at module level. One process checks the base and the head of a comparison, and each commit of `blame` and `history`, alternately with the same plugin instance. Key any cache by `ctx.root`, or keep it inside `verify`.
 - Ship a `default` condition in your package `exports` (or a `main`): ctxtruth resolves plugin packages with `require.resolve`, which does not match an `import`-only condition.
 - Check ids are `<plugin name>/<check>`; config `rules` keys use them.
+- Return in bounded time: ctxtruth applies no timeout to `verify`, so a hung promise hangs the run.
 
 ## Trust
 
