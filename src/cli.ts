@@ -141,6 +141,32 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
       code = exceeds(report.summary.errors, report.summary.warnings, failOn) ? 1 : 0;
     });
 
+  cli
+    .command('blame')
+    .description('Find the commit that made each stale claim false')
+    .argument('[paths...]', 'files or directories to check (default: all configured targets)')
+    .addOption(
+      new Option(
+        '--format <format>',
+        'output format (default: text, or agent when run by a coding agent)',
+      ).choices(['text', 'json', 'agent']),
+    )
+    .option('--config <path>', 'config file (default: ctxtruth.config.* in the root)')
+    .option('--root <dir>', 'repository root (default: current directory)')
+    .exitOverride()
+    .action(async (paths: string[], flags: { format?: Format; config?: string; root?: string }) => {
+      const { blame } = await import('./blame.js');
+      const { formatBlame } = await import('./report/blame.js');
+      const report = await blame({
+        root: resolve(io.cwd, flags.root ?? '.'),
+        paths,
+        cwd: io.cwd,
+        ...(flags.config !== undefined && { configPath: resolve(io.cwd, flags.config) }),
+      });
+      const format = resolveFormat({ ...flags, color: false }, io);
+      io.stdout(formatBlame(report, format === 'json' || format === 'agent' ? format : 'text'));
+    });
+
   try {
     await cli.parseAsync(argv, { from: 'user' });
     return code;
