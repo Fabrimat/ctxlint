@@ -10,7 +10,7 @@ inputs:
     description: npm version of ctxtruth to run.
     default: latest
   command:
-    description: Command that runs ctxtruth. Defaults to `npx --yes ctxtruth@<version>`.
+    description: Command that runs ctxtruth. Defaults to ctxtruth@<version> installed outside the checkout.
     default: ''
   args:
     description: Extra CLI arguments, split on whitespace.
@@ -25,7 +25,7 @@ inputs:
     description: Report only findings introduced since the merge base. Use `true` or `false`; empty means true on pull_request events and when `base` is set.
     default: ''
   untrusted:
-    description: Pass --untrusted, so no code from the repository is imported. Use `true` or `false`; empty means true on pull_request_target events.
+    description: Pass --untrusted, so ctxtruth imports no config or plugin code from the repository. Use `true` or `false`; empty means true on pull_request_target events. It does not make a custom `command` safe to run on untrusted code.
     default: ''
   comment:
     description: Create or update a pull request comment with the report.
@@ -79,7 +79,11 @@ runs:
         if [ -n "$INPUT_COMMAND" ]; then
           read -r -a cmd <<< "$INPUT_COMMAND"
         else
-          cmd=(npx --yes "ctxtruth@$INPUT_VERSION")
+          # Installed from outside the checkout: a repository .npmrc or local package cannot
+          # redirect it, and no install script runs.
+          prefix="$RUNNER_TEMP/ctxtruth-cli"
+          (cd "$RUNNER_TEMP" && npm install --silent --no-save --ignore-scripts --prefix "$prefix" "ctxtruth@$INPUT_VERSION")
+          cmd=(node "$prefix/node_modules/ctxtruth/dist/cli.js")
         fi
 
         base="$INPUT_BASE"

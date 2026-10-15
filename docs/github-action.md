@@ -42,12 +42,12 @@ A finding is marked as a code change when its claim passed at the base and its d
 | Input               | Default                         | Description                                                                           |
 | ------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
 | `version`           | `latest`                        | npm version of ctxtruth to run.                                                       |
-| `command`           | npx with version                | Command that runs ctxtruth. Useful to run a local build.                              |
+| `command`           | npm package, installed in temp  | Command that runs ctxtruth. Useful to run a local build.                              |
 | `args`              |                                 | Extra CLI arguments, split on whitespace.                                             |
 | `paths`             |                                 | Files or directories to check, split on whitespace. Empty checks the default targets. |
 | `base`              | PR base branch                  | Git ref to compare against.                                                           |
 | `new-only`          | `true` on PRs                   | Report only findings introduced since the merge base. Also on when `base` is set.     |
-| `untrusted`         | `true` on `pull_request_target` | Pass `--untrusted`: never import config or plugin code from the repository.           |
+| `untrusted`         | `true` on `pull_request_target` | Pass `--untrusted`: ctxtruth imports no config or plugin code from the repository.    |
 | `comment`           | `true`                          | Create or update the pull request comment.                                            |
 | `sarif`             | `false`                         | Write SARIF and upload it with the CodeQL upload action, category `ctxtruth`.         |
 | `fail-on`           | `error`                         | `error`, `warning` or `none`.                                                         |
@@ -73,6 +73,14 @@ The report is also added to the job summary.
 Pull requests from forks get a read-only token, so the comment and the SARIF upload cannot succeed.
 The action turns both into warnings and still fails the job when the checks do: the exit code is applied at the end, after the comment and upload steps.
 The report stays available in the job summary.
+
+## Untrusted code
+
+On `pull_request` the workflow runs without secrets and with a read-only token for forks, so checking the pull request's code is safe, plugins included.
+`pull_request_target` runs with secrets: if you check out the pull request head there, everything in it is untrusted.
+For that event `untrusted` defaults to `true`, so ctxtruth reads only a JSON config and loads no plugins, and the default launch installs ctxtruth outside the checkout, so a repository `.npmrc` cannot redirect it.
+`untrusted` covers ctxtruth only: a custom `command` (e.g. `node dist/cli.js`) runs whatever the checkout contains.
+On `pull_request_target` the action posts no comment and sets no default `base`: it compares only when you pass `base`.
 
 ## SARIF
 
