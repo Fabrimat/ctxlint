@@ -91,6 +91,8 @@ The exit code is 1 because there are errors; see [exit codes](#exit-codes).
 | `snippets` | M2     | `ts`/`tsx` code blocks still type-check against the code they import.                     |
 | `versions` | M2     | `pkg@version` mentions match the installed version, the lockfile or `package.json`.       |
 
+Plugins add checks for claims ctxtruth does not know about, such as your own CLI's commands or ids from a content index: see [docs/plugins.md](docs/plugins.md).
+
 Monorepos are understood: a script is looked up in the nearest package, workspace filters are resolved, and a script that exists only in another workspace is reported with its location.
 
 ## How claims are extracted
@@ -134,14 +136,15 @@ export default defineConfig({
 
 All options and their defaults:
 
-| Option          | Default                         | Description                                                                        |
-| --------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
-| `targets`       | agent and doc files (see below) | Glob patterns of Markdown files to check.                                          |
-| `ignore`        | `[]`                            | Glob patterns excluded from `targets`.                                             |
-| `rules`         | see below                       | Severity per check: `"error"`, `"warning"` or `"off"`.                             |
-| `prose`         | `false`                         | Also extract path claims from plain prose.                                         |
-| `failOn`        | `"error"`                       | Lowest severity that makes the run fail: `"error"`, `"warning"` or `"none"`.       |
-| `ignoreRegions` | `[]`                            | `{ begin, end }` regex sources; claims between matching HTML comments are skipped. |
+| Option          | Default                         | Description                                                                                 |
+| --------------- | ------------------------------- | ------------------------------------------------------------------------------------------- |
+| `targets`       | agent and doc files (see below) | Glob patterns of Markdown files to check.                                                   |
+| `ignore`        | `[]`                            | Glob patterns excluded from `targets`.                                                      |
+| `rules`         | see below                       | Severity per check: `"error"`, `"warning"` or `"off"`; plugin checks as `<plugin>/<check>`. |
+| `plugins`       | `[]`                            | Plugin packages or paths, optionally `["name", options]` ([plugins](docs/plugins.md)).      |
+| `prose`         | `false`                         | Also extract path claims from plain prose.                                                  |
+| `failOn`        | `"error"`                       | Lowest severity that makes the run fail: `"error"`, `"warning"` or `"none"`.                |
+| `ignoreRegions` | `[]`                            | `{ begin, end }` regex sources; claims between matching HTML comments are skipped.          |
 
 <!-- ctxtruth-ignore -->
 
@@ -260,7 +263,8 @@ console.log(formatReport(report, 'text', { color: false, verbose: false }));
 - **M1 (done):** paths, scripts and commands checks, text and JSON reports, config.
 - **M2 (done):** symbols, snippets and versions checks.
 - **M3 (done):** GitHub Action, SARIF output, reporting only findings a pull request introduces, `--changed-only`.
-- **M4 (current):** history engine: `ctxtruth blame` to find the commit that made a claim stale, `ctxtruth history`, and the DriftBench dataset.
+- **M4 (done):** history engine: `ctxtruth blame` to find the commit that made a claim stale, `ctxtruth history`, and the DriftBench dataset.
+- **M4.5 (current):** plugin API for custom checks, `--untrusted`, `ignoreRegions`, and versioned JSON Schemas.
 - **M5:** opt-in LLM checks with cost tracking, and evals to measure them.
 - **M6:** a study of documentation drift on real repositories.
 
