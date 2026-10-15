@@ -35,24 +35,41 @@ export interface LoadOptions {
   untrusted?: boolean;
 }
 
+const CODE_CONFIG = /\.[cm]?[jt]s$/;
+
 export async function loadConfig(
   root: string,
   explicitPath?: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _opts: LoadOptions = {},
-): Promise<{ config: Config; path: string | null }> {
+  opts: LoadOptions = {},
+): Promise<{ config: Config; path: string | null; warnings: string[] }> {
+  const untrusted = opts.untrusted === true;
+  const warnings: string[] = [];
   let path: string | null;
   if (explicitPath !== undefined) {
     path = resolve(root, explicitPath);
     if (!existsSync(path)) throw new ConfigError(`Config file not found: ${path}`);
+    if (untrusted && CODE_CONFIG.test(path)) {
+      throw new ConfigError(`Refusing to import ${path} with --untrusted; use a JSON config.`);
+    }
   } else {
-    path = CONFIG_NAMES.map((n) => join(root, n)).find((p) => existsSync(p)) ?? null;
+    const found = CONFIG_NAMES.map((n) => join(root, n)).filter((p) => existsSync(p));
+    if (untrusted) {
+      for (const p of found.filter((f) => CODE_CONFIG.test(f))) {
+        warnings.push(`--untrusted: skipping ${p} (it would be imported)`);
+      }
+    }
+    path = found.find((p) => !untrusted || p.endsWith('.json')) ?? null;
   }
-  if (path === null) return { config: configSchema.parse({}), path };
+  if (path === null) return { config: configSchema.parse({}), path, warnings };
 
   const parsed = configSchema.safeParse((await readRaw(path)) ?? {});
   if (!parsed.success) {
     throw new ConfigError(`Invalid config ${path}:\n${z.prettifyError(parsed.error)}`);
   }
-  return { config: parsed.data, path };
+  const config = parsed.data;
+  if (untrusted && config.plugins.length > 0) {
+    warnings.push(`--untrusted: ignoring \`plugins\` in ${path}`);
+    config.plugins = [];
+  }
+  return { config, path, warnings };
 }

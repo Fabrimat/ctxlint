@@ -58,4 +58,5 @@ node bench/driftbench/build.ts
 
 Repositories and pinned commits live in `repos.json` (`name`, `url`, `sha`, and optionally `root`,
 `checks`, `maxCommits`). Clones go to `$DRIFTBENCH_CACHE` (default `<tmp>/driftbench`), are checked
-out detached, and no script, install or hook of a cloned repository is run.
+out detached, and no script, install or hook of a cloned repository is run. The CLI runs with
+`--untrusted`, so no config or plugin code from a cloned repository is imported either.

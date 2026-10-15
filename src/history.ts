@@ -221,7 +221,9 @@ export interface HistoryResult {
 export async function history(opts: HistoryOptions): Promise<HistoryResult> {
   const root = resolve(opts.root);
   await assertFullHistory(root);
-  const { config: loaded } = await loadConfig(root, opts.configPath);
+  const { config: loaded } = await loadConfig(root, opts.configPath, {
+    untrusted: opts.untrusted === true,
+  });
   const known = checks.map((c) => c.id);
   for (const id of opts.checks ?? []) {
     if (!known.includes(id as CheckId)) {

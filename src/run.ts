@@ -62,7 +62,15 @@ export async function collectClaims(
   const claims: Claim[] = [];
   for (const file of docFiles) {
     const text = await readFile(join(index.root, file), 'utf8');
-    claims.push(...parseMarkdown(text, file, { prose: config.prose }));
+    claims.push(
+      ...parseMarkdown(text, file, {
+        prose: config.prose,
+        ignoreRegions: config.ignoreRegions.map((r) => ({
+          begin: new RegExp(r.begin),
+          end: new RegExp(r.end),
+        })),
+      }),
+    );
   }
   return { claims, docFiles };
 }
@@ -105,7 +113,9 @@ export async function check(opts: CheckOptions): Promise<{ report: Report; confi
   }
   const started = performance.now();
   const root = resolve(opts.root);
-  const { config } = await loadConfig(root, opts.configPath);
+  const { config } = await loadConfig(root, opts.configPath, {
+    untrusted: opts.untrusted === true,
+  });
   const cwd = opts.cwd ?? process.cwd();
   const prefixes = (opts.paths ?? []).map((p) => toPrefix(root, cwd, p));
   const inScope = (f: string): boolean =>

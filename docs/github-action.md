@@ -39,19 +39,20 @@ A finding is marked as a code change when its claim passed at the base and its d
 
 ## Inputs
 
-| Input               | Default          | Description                                                                           |
-| ------------------- | ---------------- | ------------------------------------------------------------------------------------- |
-| `version`           | `latest`         | npm version of ctxtruth to run.                                                       |
-| `command`           | npx with version | Command that runs ctxtruth. Useful to run a local build.                              |
-| `args`              |                  | Extra CLI arguments, split on whitespace.                                             |
-| `paths`             |                  | Files or directories to check, split on whitespace. Empty checks the default targets. |
-| `base`              | PR base branch   | Git ref to compare against.                                                           |
-| `new-only`          | `true` on PRs    | Report only findings introduced since the merge base. Also on when `base` is set.     |
-| `comment`           | `true`           | Create or update the pull request comment.                                            |
-| `sarif`             | `false`          | Write SARIF and upload it with the CodeQL upload action, category `ctxtruth`.         |
-| `fail-on`           | `error`          | `error`, `warning` or `none`.                                                         |
-| `github-token`      | `github.token`   | Token used to write the comment.                                                      |
-| `working-directory` | `.`              | Directory to run in.                                                                  |
+| Input               | Default                         | Description                                                                           |
+| ------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
+| `version`           | `latest`                        | npm version of ctxtruth to run.                                                       |
+| `command`           | npx with version                | Command that runs ctxtruth. Useful to run a local build.                              |
+| `args`              |                                 | Extra CLI arguments, split on whitespace.                                             |
+| `paths`             |                                 | Files or directories to check, split on whitespace. Empty checks the default targets. |
+| `base`              | PR base branch                  | Git ref to compare against.                                                           |
+| `new-only`          | `true` on PRs                   | Report only findings introduced since the merge base. Also on when `base` is set.     |
+| `untrusted`         | `true` on `pull_request_target` | Pass `--untrusted`: never import config or plugin code from the repository.           |
+| `comment`           | `true`                          | Create or update the pull request comment.                                            |
+| `sarif`             | `false`                         | Write SARIF and upload it with the CodeQL upload action, category `ctxtruth`.         |
+| `fail-on`           | `error`                         | `error`, `warning` or `none`.                                                         |
+| `github-token`      | `github.token`                  | Token used to write the comment.                                                      |
+| `working-directory` | `.`                             | Directory to run in.                                                                  |
 
 ## Outputs
 
