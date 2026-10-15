@@ -16,7 +16,7 @@ const write = (name: string, body: string): Promise<void> => writeFile(join(dir,
 
 describe('loadConfig', () => {
   it('returns defaults when no config exists', async () => {
-    expect(await loadConfig(dir)).toEqual({ config: defaultConfig, path: null });
+    expect(await loadConfig(dir)).toEqual({ config: defaultConfig, path: null, warnings: [] });
   });
 
   it('loads ctxtruth.config.json', async () => {

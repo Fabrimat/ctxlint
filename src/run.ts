@@ -5,6 +5,7 @@ import { checks as builtins } from './checks/index.js';
 import { loadConfig, type Config } from './config/index.js';
 import { buildRepoIndex, matchesAny } from './index/index.js';
 import { parseMarkdown, type ParseOptions } from './parse/index.js';
+import type { IgnoreRegion } from './parse/markers.js';
 import { changedOnly, classify, ENVIRONMENT_CHECKS, renamed } from './compare.js';
 import { changedFiles, resolveBase } from './git/diff.js';
 import { withWorktree } from './git/worktree.js';
@@ -44,15 +45,19 @@ export interface Loaded {
   parse: ParseOptions;
 }
 
+const regions = (list: readonly { begin: string; end: string }[]): IgnoreRegion[] =>
+  list.map((r) => ({ begin: new RegExp(r.begin), end: new RegExp(r.end) }));
+
 /** Loads the config and its plugins (none when untrusted) once, for every commit a run visits. */
 export async function load(
   root: string,
   opts: Pick<CheckOptions, 'configPath' | 'untrusted' | 'onWarning'>,
 ): Promise<Loaded> {
   const untrusted = opts.untrusted === true;
-  const { config, path } = await loadConfig(root, opts.configPath, { untrusted });
+  const { config, path, warnings } = await loadConfig(root, opts.configPath, { untrusted });
+  for (const w of warnings) opts.onWarning?.(w);
   const checks = [...builtins];
-  const parse: ParseOptions = { prose: config.prose, ignoreRegions: config.ignoreRegions };
+  const parse: ParseOptions = { prose: config.prose, ignoreRegions: regions(config.ignoreRegions) };
   const rules = { ...config.rules };
   if (config.plugins.length > 0 && !untrusted) {
     // Only taken when plugins are configured, so a plain run imports no plugin code.
@@ -61,10 +66,10 @@ export async function load(
     const plugins = await loadPlugins(config, root, path);
     const pluginChecks = plugins.flatMap((p) => p.plugin.checks);
     parse.matchers = pluginChecks;
-    parse.ignoreRegions = [
+    parse.ignoreRegions = regions([
       ...config.ignoreRegions,
       ...plugins.flatMap((p) => p.plugin.ignoreRegions ?? []),
-    ];
+    ]);
     for (const { plugin, options } of plugins) {
       for (const c of plugin.checks) {
         rules[c.id] ??= c.defaultSeverity ?? 'warning';

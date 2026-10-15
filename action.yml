@@ -24,6 +24,9 @@ inputs:
   new-only:
     description: Report only findings introduced since the merge base. Use `true` or `false`; empty means true on pull_request events and when `base` is set.
     default: ''
+  untrusted:
+    description: Pass --untrusted, so no code from the repository is imported. Use `true` or `false`; empty means true on pull_request_target events.
+    default: ''
   comment:
     description: Create or update a pull request comment with the report.
     default: 'true'
@@ -62,6 +65,7 @@ runs:
         INPUT_PATHS: ${{ inputs.paths }}
         INPUT_BASE: ${{ inputs.base }}
         INPUT_NEW_ONLY: ${{ inputs.new-only }}
+        INPUT_UNTRUSTED: ${{ inputs.untrusted }}
         INPUT_SARIF: ${{ inputs.sarif }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         EVENT_NAME: ${{ github.event_name }}
@@ -88,6 +92,11 @@ runs:
           if [ "$EVENT_NAME" = "pull_request" ] || [ -n "$INPUT_BASE" ]; then new_only=true; else new_only=false; fi
         fi
 
+        untrusted="$INPUT_UNTRUSTED"
+        if [ -z "$untrusted" ]; then
+          if [ "$EVENT_NAME" = "pull_request_target" ]; then untrusted=true; else untrusted=false; fi
+        fi
+
         args=(check)
         if [ -n "$INPUT_PATHS" ]; then
           read -r -a paths <<< "$INPUT_PATHS"
@@ -96,6 +105,7 @@ runs:
         args+=(--format markdown --output "$report" --link-base "$LINK_BASE" --fail-on "$INPUT_FAIL_ON")
         if [ -n "$base" ]; then args+=(--base "$base"); fi
         if [ "$new_only" = "true" ]; then args+=(--new-only); fi
+        if [ "$untrusted" = "true" ]; then args+=(--untrusted); fi
         if [ "$INPUT_SARIF" = "true" ]; then args+=(--sarif "$sarif"); fi
         if [ -n "$INPUT_ARGS" ]; then
           read -r -a extra <<< "$INPUT_ARGS"

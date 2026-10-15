@@ -134,13 +134,14 @@ export default defineConfig({
 
 All options and their defaults:
 
-| Option    | Default                         | Description                                                                  |
-| --------- | ------------------------------- | ---------------------------------------------------------------------------- |
-| `targets` | agent and doc files (see below) | Glob patterns of Markdown files to check.                                    |
-| `ignore`  | `[]`                            | Glob patterns excluded from `targets`.                                       |
-| `rules`   | see below                       | Severity per check: `"error"`, `"warning"` or `"off"`.                       |
-| `prose`   | `false`                         | Also extract path claims from plain prose.                                   |
-| `failOn`  | `"error"`                       | Lowest severity that makes the run fail: `"error"`, `"warning"` or `"none"`. |
+| Option          | Default                         | Description                                                                        |
+| --------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
+| `targets`       | agent and doc files (see below) | Glob patterns of Markdown files to check.                                          |
+| `ignore`        | `[]`                            | Glob patterns excluded from `targets`.                                             |
+| `rules`         | see below                       | Severity per check: `"error"`, `"warning"` or `"off"`.                             |
+| `prose`         | `false`                         | Also extract path claims from plain prose.                                         |
+| `failOn`        | `"error"`                       | Lowest severity that makes the run fail: `"error"`, `"warning"` or `"none"`.       |
+| `ignoreRegions` | `[]`                            | `{ begin, end }` regex sources; claims between matching HTML comments are skipped. |
 
 <!-- ctxtruth-ignore -->
 
@@ -162,27 +163,30 @@ Everything between disable and enable is not checked.
 <!-- ctxtruth-enable -->
 ```
 
+Generated sections can be skipped with `ignoreRegions`: each HTML comment matching a `begin` regex opens a region and one matching `end` closes it (nesting is counted, an unclosed region runs to the end of the file). For example `{ "begin": "^<!-- BEGIN GENERATED", "end": "^<!-- END GENERATED" }`.
+
 ## CLI reference
 
 ```text
 ctxtruth check [paths...] [options]
 ```
 
-| Option              | Description                                                                                             |
-| ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `paths...`          | Files or directories to check, relative to the current directory.                                       |
-| `--format <format>` | `text`, `json`, `sarif`, `markdown` or `agent`. Default `text`, or `agent` when a coding agent runs it. |
-| `--base <ref>`      | Git ref to compare with. Defaults to the pull request base on GitHub Actions.                           |
-| `--new-only`        | Only report findings introduced since the merge base with `--base`.                                     |
-| `--changed-only`    | Only check claims in docs, or about files, changed since `--base` (trades recall).                      |
-| `--output <file>`   | Write the report to a file instead of stdout.                                                           |
-| `--sarif <file>`    | Also write a SARIF report to this file.                                                                 |
-| `--link-base <url>` | URL prefix for file links in the markdown report.                                                       |
-| `--config <path>`   | Use this config file instead of searching the root.                                                     |
-| `--root <dir>`      | Repository root. Defaults to the current directory.                                                     |
-| `--fail-on <level>` | `error`, `warning` or `none`. Overrides the config file.                                                |
-| `--verbose`         | Also list claims that were `unknown`, with the reason.                                                  |
-| `--no-color`        | Disable colour. Colour is also off when not a TTY, with `NO_COLOR`, or in JSON.                         |
+| Option              | Description                                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `paths...`          | Files or directories to check, relative to the current directory.                                                                                                                    |
+| `--format <format>` | `text`, `json`, `sarif`, `markdown` or `agent`. Default `text`, or `agent` when a coding agent runs it.                                                                              |
+| `--base <ref>`      | Git ref to compare with. Defaults to the pull request base on GitHub Actions.                                                                                                        |
+| `--new-only`        | Only report findings introduced since the merge base with `--base`.                                                                                                                  |
+| `--changed-only`    | Only check claims in docs, or about files, changed since `--base` (trades recall).                                                                                                   |
+| `--output <file>`   | Write the report to a file instead of stdout.                                                                                                                                        |
+| `--sarif <file>`    | Also write a SARIF report to this file.                                                                                                                                              |
+| `--link-base <url>` | URL prefix for file links in the markdown report.                                                                                                                                    |
+| `--config <path>`   | Use this config file instead of searching the root.                                                                                                                                  |
+| `--root <dir>`      | Repository root. Defaults to the current directory.                                                                                                                                  |
+| `--fail-on <level>` | `error`, `warning` or `none`. Overrides the config file.                                                                                                                             |
+| `--untrusted`       | Never import code from the repository: a `ctxtruth.config.{ts,mts,mjs,js}` is skipped (an explicit one is an error) and config `plugins` are ignored. Also on `blame` and `history`. |
+| `--verbose`         | Also list claims that were `unknown`, with the reason.                                                                                                                               |
+| `--no-color`        | Disable colour. Colour is also off when not a TTY, with `NO_COLOR`, or in JSON.                                                                                                      |
 
 `FORCE_COLOR` (anything but `0`) forces colour on.
 

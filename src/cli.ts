@@ -21,6 +21,7 @@ interface CheckFlags {
   base?: string;
   changedOnly?: boolean;
   newOnly?: boolean;
+  untrusted?: boolean;
   linkBase?: string;
   output?: string;
   sarif?: string;
@@ -100,6 +101,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
     .option('--sarif <file>', 'also write a SARIF report to this file')
     .option('--config <path>', 'config file (default: ctxtruth.config.* in the root)')
     .option('--root <dir>', 'repository root (default: current directory)')
+    .option('--untrusted', 'never import code from the repository (JSON config only, no plugins)')
     .addOption(
       new Option(
         '--fail-on <level>',
@@ -123,6 +125,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         ...(flags.changedOnly && { changedOnly: true }),
         ...(flags.newOnly && { newOnly: true }),
         onWarning,
+        ...(flags.untrusted && { untrusted: true }),
       });
       if (paths.length > 0 && report.files.length === 0) {
         // A typo in a CI path argument must not pass silently.
@@ -157,20 +160,27 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
     )
     .option('--config <path>', 'config file (default: ctxtruth.config.* in the root)')
     .option('--root <dir>', 'repository root (default: current directory)')
+    .option('--untrusted', 'never import code from the repository (JSON config only, no plugins)')
     .exitOverride()
-    .action(async (paths: string[], flags: { format?: Format; config?: string; root?: string }) => {
-      const { blame } = await import('./blame.js');
-      const { formatBlame } = await import('./report/blame.js');
-      const report = await blame({
-        root: resolve(io.cwd, flags.root ?? '.'),
-        paths,
-        cwd: io.cwd,
-        ...(flags.config !== undefined && { configPath: resolve(io.cwd, flags.config) }),
-        onWarning,
-      });
-      const format = resolveFormat({ ...flags, color: false }, io);
-      io.stdout(formatBlame(report, format === 'json' || format === 'agent' ? format : 'text'));
-    });
+    .action(
+      async (
+        paths: string[],
+        flags: { format?: Format; config?: string; root?: string; untrusted?: boolean },
+      ) => {
+        const { blame } = await import('./blame.js');
+        const { formatBlame } = await import('./report/blame.js');
+        const report = await blame({
+          root: resolve(io.cwd, flags.root ?? '.'),
+          paths,
+          cwd: io.cwd,
+          ...(flags.config !== undefined && { configPath: resolve(io.cwd, flags.config) }),
+          onWarning,
+          ...(flags.untrusted && { untrusted: true }),
+        });
+        const format = resolveFormat({ ...flags, color: false }, io);
+        io.stdout(formatBlame(report, format === 'json' || format === 'agent' ? format : 'text'));
+      },
+    );
 
   cli
     .command('history')
@@ -190,6 +200,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
     .option('--repo-name <name>', 'repository name in the output (default: the root folder name)')
     .option('--config <path>', 'config file (default: ctxtruth.config.* in the root)')
     .option('--root <dir>', 'repository root (default: current directory)')
+    .option('--untrusted', 'never import code from the repository (JSON config only, no plugins)')
     .exitOverride()
     .action(
       async (flags: {
@@ -201,6 +212,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         repoName?: string;
         config?: string;
         root?: string;
+        untrusted?: boolean;
       }) => {
         const maxCommits = flags.maxCommits === undefined ? undefined : Number(flags.maxCommits);
         if (maxCommits !== undefined && (!Number.isInteger(maxCommits) || maxCommits < 1)) {
@@ -212,6 +224,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         const result = await history({
           root: resolve(io.cwd, flags.root ?? '.'),
           ...(maxCommits !== undefined && { maxCommits }),
+          ...(flags.untrusted && { untrusted: true }),
           ...(flags.config !== undefined && { configPath: resolve(io.cwd, flags.config) }),
           ...(flags.since !== undefined && { since: flags.since }),
           ...(flags.checks !== undefined && {

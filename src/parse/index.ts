@@ -4,7 +4,15 @@ import { gfmFromMarkdown } from 'mdast-util-gfm';
 import { gfm } from 'micromark-extension-gfm';
 import type { PluginCheck } from '../plugin/types.js';
 import type { Claim, ClaimKind, ClaimSource } from '../types.js';
-import { disabledRanges, isDisabled, markerOf, type Toggle } from './markers.js';
+import {
+  disabledRanges,
+  isDisabled,
+  markerOf,
+  regionDelta,
+  regionRanges,
+  type IgnoreRegion,
+  type Toggle,
+} from './markers.js';
 import { inlinePath, linkPath, proseTokens, type PathParts } from './paths.js';
 import { leadingBinary, logicalLines, parseShellLine, type Piece } from './shell.js';
 import { inlineSymbol } from './symbols.js';
@@ -18,8 +26,8 @@ export interface ParseOptions {
    * the first check that matches takes the claim (as `custom`, with `meta.check`).
    */
   matchers?: readonly Pick<PluginCheck, 'id' | 'match'>[];
-  /** HTML comment pairs (regular expression sources) whose content is not checked. */
-  ignoreRegions?: readonly { begin: string; end: string }[];
+  /** Claims between a `begin` and an `end` HTML comment (nesting counted) are dropped. */
+  ignoreRegions?: IgnoreRegion[];
 }
 
 interface Pos {
@@ -52,6 +60,7 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
 
   const headings: { depth: number; text: string }[] = [];
   const toggles: Toggle[] = [];
+  const regionEvents: { delta: 1 | -1; line: number }[] = [];
   const claims: Claim[] = [];
 
   // ponytail: linear scan per lookup; use binary search if documents reach tens of thousands of lines.
@@ -194,6 +203,8 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
         if ((marker === 'disable' || marker === 'enable') && line !== undefined) {
           toggles.push({ marker, line });
         }
+        const delta = regionDelta(node.value, opts.ignoreRegions ?? []);
+        if (delta !== 0 && line !== undefined) regionEvents.push({ delta, line });
         return;
       }
       case 'inlineCode':
@@ -224,6 +235,6 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
   }
 
   visit(tree, false);
-  const ranges = disabledRanges(toggles);
+  const ranges = [...disabledRanges(toggles), ...regionRanges(regionEvents)];
   return claims.filter((c) => !isDisabled(c.line, ranges));
 }

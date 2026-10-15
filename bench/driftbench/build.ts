@@ -39,7 +39,15 @@ for (const e of entries) {
   if (!existsSync(dir)) git(cache, 'clone', '--quiet', '--filter=blob:none', '--', e.url, dir);
   else git(dir, 'fetch', '--quiet', 'origin');
   git(dir, 'checkout', '--quiet', '--detach', e.sha);
-  const args = [cli, 'history', '--root', e.root ? join(dir, e.root) : dir, '--repo-name', e.name];
+  const args = [
+    cli,
+    'history',
+    '--root',
+    e.root ? join(dir, e.root) : dir,
+    '--repo-name',
+    e.name,
+    '--untrusted',
+  ];
   args.push('--format', 'jsonl', '--max-commits', String(e.maxCommits ?? 100));
   if (e.checks) args.push('--checks', e.checks);
   const out = execFileSync('node', args, { encoding: 'utf8', maxBuffer: 1 << 30 });

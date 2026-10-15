@@ -87,7 +87,7 @@ describe('plugin loading', () => {
     expect(warnings).toEqual(['rule `gone/check` names a check that no loaded plugin provides']);
   });
 
-  it('loads no plugin code, and warns about nothing, when untrusted', async () => {
+  it('loads no plugin code when untrusted, and only notes the ignored plugins', async () => {
     const dir = setup(
       { 'p.mjs': 'throw new Error("imported");\n' },
       { plugins: ['./p.mjs'], rules: { 'p/one': 'error' } },
@@ -95,6 +95,6 @@ describe('plugin loading', () => {
     const warnings: string[] = [];
     const loaded = await load(dir, { untrusted: true, onWarning: (m) => warnings.push(m) });
     expect(loaded.checks.every((c) => !c.id.includes('/'))).toBe(true);
-    expect(warnings).toEqual([]);
+    expect(warnings).toEqual([expect.stringMatching(/^--untrusted: ignoring `plugins`/)]);
   });
 });
