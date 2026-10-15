@@ -37,7 +37,9 @@ describe('implicit pnpm/yarn scripts', () => {
   });
 
   it('is unknown at a past commit, which has no installed binaries', async () => {
-    expect((await one(implicit('vite'), { ...index, depsRoot: '/head' }))?.status).toBe('unknown');
+    const past = { ...index, depsRoot: '/head' };
+    expect((await one(implicit('vite'), past))?.status).toBe('unknown');
+    expect((await one(implicit('buidl'), past))?.status).toBe('fail');
   });
 });
 

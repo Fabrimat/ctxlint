@@ -57,19 +57,6 @@ export const scriptsCheck: Check = {
       const owner = target.find((p) => Object.hasOwn(p.scripts, name));
       if (owner) return pass(claim, 'scripts', [packageJsonPath(owner.dir)]);
 
-      // `pnpm vitest` / `yarn vitest` without such a script run the dependency's binary.
-      if (claim.meta?.['implicit'] === 'true') {
-        const pkg = provider(name, all);
-        if (pkg) return pass(claim, 'scripts', [packageJsonPath(pkg.dir)]);
-        if (ctx.index.depsRoot !== undefined) {
-          return unknown(
-            claim,
-            'scripts',
-            'no script; may be a binary not installed at a past commit',
-          );
-        }
-      }
-
       const first = packageJsonPath(target[0]?.dir ?? '');
       const other = all.find((p) => !target.includes(p) && Object.hasOwn(p.scripts, name));
       if (other) {
@@ -87,6 +74,19 @@ export const scriptsCheck: Check = {
         target.flatMap((p) => Object.keys(p.scripts)),
         2,
       );
+      // `pnpm vitest` / `yarn vitest` without such a script run the dependency's binary.
+      if (claim.meta?.['implicit'] === 'true') {
+        const pkg = provider(name, all);
+        if (pkg) return pass(claim, 'scripts', [packageJsonPath(pkg.dir)]);
+        // A past commit has no installed binaries; a near script name still points at a typo.
+        if (ctx.index.depsRoot !== undefined && near === undefined) {
+          return unknown(
+            claim,
+            'scripts',
+            'no script; may be a binary not installed at a past commit',
+          );
+        }
+      }
       return fail(
         claim,
         'scripts',
