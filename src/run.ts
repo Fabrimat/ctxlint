@@ -9,7 +9,7 @@ import { changedOnly, classify, renamed } from './compare.js';
 import { changedFiles, resolveBase } from './git/diff.js';
 import { withWorktree } from './git/worktree.js';
 import { buildReport } from './report/index.js';
-import type { CheckResult, Claim, Comparison, Report } from './types.js';
+import type { CheckResult, Claim, Comparison, RepoIndex, Report } from './types.js';
 
 export interface CheckOptions {
   /** Repository root. */
@@ -48,6 +48,39 @@ interface RunOutput {
   docFiles: string[];
 }
 
+/** Target docs in the index and the claims parsed from them. */
+export async function collectClaims(
+  index: RepoIndex,
+  config: Config,
+  inScope: (doc: string) => boolean = () => true,
+): Promise<{ claims: Claim[]; docFiles: string[] }> {
+  const docFiles = index.files.files
+    .filter((f) => matchesAny(f, config.targets) && !matchesAny(f, config.ignore) && inScope(f))
+    .sort();
+  const claims: Claim[] = [];
+  for (const file of docFiles) {
+    const text = await readFile(join(index.root, file), 'utf8');
+    claims.push(...parseMarkdown(text, file, { prose: config.prose }));
+  }
+  return { claims, docFiles };
+}
+
+/** Runs every enabled check on `claims`, which may come from another commit than `index`. */
+export async function evaluate(
+  claims: readonly Claim[],
+  index: RepoIndex,
+  config: Config,
+): Promise<CheckResult[]> {
+  const results: CheckResult[] = [];
+  for (const c of checks) {
+    const level = config.rules[c.id];
+    if (level === 'off') continue;
+    const mine = claims.filter((claim) => c.kinds.includes(claim.kind));
+    if (mine.length > 0) results.push(...(await c.run(mine, { index, severity: level })));
+  }
+  return results;
+}
+
 /** One full check of the repository at `root` with an already-loaded config. */
 async function runOnce(
   root: string,
@@ -59,25 +92,8 @@ async function runOnce(
   if (depsRoot !== undefined && index.files.files.length === 0) {
     throw new Error(`the base checkout at ${root} lists no files`);
   }
-
-  const docFiles = index.files.files
-    .filter((f) => matchesAny(f, config.targets) && !matchesAny(f, config.ignore) && inScope(f))
-    .sort();
-
-  const claims: Claim[] = [];
-  for (const file of docFiles) {
-    const text = await readFile(join(root, file), 'utf8');
-    claims.push(...parseMarkdown(text, file, { prose: config.prose }));
-  }
-
-  const results: CheckResult[] = [];
-  for (const c of checks) {
-    const level = config.rules[c.id];
-    if (level === 'off') continue;
-    const mine = claims.filter((claim) => c.kinds.includes(claim.kind));
-    results.push(...(await c.run(mine, { index, severity: level })));
-  }
-  return { results, docFiles };
+  const { claims, docFiles } = await collectClaims(index, config, inScope);
+  return { results: await evaluate(claims, index, config), docFiles };
 }
 
 export async function check(opts: CheckOptions): Promise<{ report: Report; config: Config }> {

@@ -4,8 +4,12 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { git } from './diff.js';
 
+/** Moves the temporary worktree to another commit (same hooks and LFS guards as the first checkout). */
+export type Checkout = (sha: string) => Promise<void>;
+
 /**
- * Checks out `sha` in a temporary git worktree, runs `fn` on it and removes the worktree.
+ * Checks out `sha` in a temporary git worktree, runs `fn` on it and removes the worktree. `fn`
+ * can move the worktree to other commits with `checkout`, so a history walk pays for one worktree.
  *
  * The worktree lives under the OS temp dir, never under the repository or a `node_modules` path
  * (TypeScript treats such paths as external libraries). Hooks and LFS smudging are disabled so
@@ -14,21 +18,23 @@ import { git } from './diff.js';
 export async function withWorktree<T>(
   repo: string,
   sha: string,
-  fn: (dir: string) => Promise<T>,
+  fn: (dir: string, checkout: Checkout) => Promise<T>,
 ): Promise<T> {
   const prefix = join(await realpath(tmpdir()), 'ctxtruth-');
   const parent = await mkdtemp(prefix);
   const dir = join(parent, 'base');
+  // A hooks dir that does not exist: no post-checkout hook (e.g. husky installs) runs.
+  const noHooks = ['-c', `core.hooksPath=${join(parent, 'no-hooks')}`];
+  const env = { ...process.env, GIT_LFS_SKIP_SMUDGE: '1' };
   let added = false;
   try {
-    await git(
-      repo,
-      // A hooks dir that does not exist: no post-checkout hook (e.g. husky installs) runs.
-      ['-c', `core.hooksPath=${join(parent, 'no-hooks')}`, 'worktree', 'add', '--detach', dir, sha],
-      { ...process.env, GIT_LFS_SKIP_SMUDGE: '1' },
-    );
+    await git(repo, [...noHooks, 'worktree', 'add', '--detach', dir, sha], env);
     added = true;
-    return await fn(dir);
+    // --force only ever runs inside the temporary worktree: it discards nothing of the user's.
+    const checkout: Checkout = async (to) => {
+      await git(dir, [...noHooks, 'checkout', '--quiet', '--force', '--detach', to], env);
+    };
+    return await fn(dir, checkout);
   } finally {
     if (added && parent.startsWith(prefix) && dir.startsWith(parent)) await remove(repo, dir);
     // Non-recursive: only succeeds once the worktree is gone.
