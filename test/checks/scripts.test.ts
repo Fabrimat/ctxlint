@@ -135,6 +135,23 @@ describe('scripts check', () => {
     ]);
   });
 
+  it('is unknown in a subpackage doc for a script only the root defines', async () => {
+    const c = claim('build', { file: 'packages/foo/AGENTS.md' });
+    expect(await run(c)).toMatchObject({
+      status: 'unknown',
+      reason: 'defined in the root package; may be run from the root',
+    });
+  });
+
+  it('still warns for a sibling workspace script or an explicit target', async () => {
+    const sibling = claim('gen', { file: 'packages/foo/AGENTS.md' });
+    expect((await run(sibling)).finding?.message).toBe(
+      'Script `gen` is not defined in `packages/foo/package.json` (it is defined in `packages/bar/package.json`)',
+    );
+    const filtered = claim('build', { meta: { filter: '@acme/foo' } });
+    expect((await run(filtered)).status).toBe('fail');
+  });
+
   it('missing everywhere uses ctx severity and suggests a near name', async () => {
     const c = claim('biuld');
     expect(await run(c)).toEqual({

@@ -58,6 +58,14 @@ export const scriptsCheck: Check = {
       if (owner) return pass(claim, 'scripts', [packageJsonPath(owner.dir)]);
 
       const first = packageJsonPath(target[0]?.dir ?? '');
+      // A doc in a subpackage often means "from the repo root"; only an explicit target is sure.
+      const { filter, dir } = claim.meta ?? {};
+      const root = ctx.index.packages.root;
+      if (filter === undefined && dir === undefined && Object.hasOwn(root.scripts, name)) {
+        return unknown(claim, 'scripts', 'defined in the root package; may be run from the root', [
+          'package.json',
+        ]);
+      }
       const other = all.find((p) => !target.includes(p) && Object.hasOwn(p.scripts, name));
       if (other) {
         const where = packageJsonPath(other.dir);
