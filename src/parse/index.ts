@@ -42,11 +42,11 @@ const PACKAGE_MANAGER_COMMAND = /^(?:npm|pnpm|yarn|bun|npx)(?=\s|$)/;
 const FRONTMATTER = /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
 /** Empties a leading YAML frontmatter block but keeps its line breaks, so line numbers hold. */
-function blankFrontmatter(text: string): string {
+export function blankFrontmatter(text: string): string {
   return text.replace(FRONTMATTER, (block) => block.replace(/[^\r\n]/g, ''));
 }
 
-function textOf(node: Nodes): string {
+export function textOf(node: Nodes): string {
   if ('value' in node) return node.value;
   return 'children' in node ? node.children.map(textOf).join('') : '';
 }
