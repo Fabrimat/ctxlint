@@ -8,7 +8,7 @@ branding:
 inputs:
   version:
     description: npm version of ctxtruth to run.
-    default: latest
+    default: '^0'
   command:
     description: Command that runs ctxtruth. Defaults to ctxtruth@<version> installed outside the checkout.
     default: ''

@@ -41,7 +41,7 @@ A finding is marked as a code change when its claim passed at the base and its d
 
 | Input               | Default                         | Description                                                                           |
 | ------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
-| `version`           | `latest`                        | npm version of ctxtruth to run.                                                       |
+| `version`           | `^0`                            | npm version or range of ctxtruth to run.                                              |
 | `command`           | npm package, installed in temp  | Command that runs ctxtruth. Useful to run a local build.                              |
 | `args`              |                                 | Extra CLI arguments, split on whitespace.                                             |
 | `paths`             |                                 | Files or directories to check, split on whitespace. Empty checks the default targets. |
