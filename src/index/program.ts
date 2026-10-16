@@ -55,42 +55,57 @@ function targets(v: unknown): string[] {
   return [];
 }
 
-/** Source entry files of a workspace package: built outputs are mapped back to `src/`. */
-function entries(ts: TS, index: RepoIndex, dir: string): string[] {
-  const root = index.root.replaceAll('\\', '/');
-  let json: Record<string, unknown> = {};
+function readJson(ts: TS, path: string): Record<string, unknown> {
   try {
-    json = JSON.parse(
-      ts.sys.readFile(posix.join(root, dir, 'package.json')) ?? '{}',
-    ) as typeof json;
+    return JSON.parse(ts.sys.readFile(path) ?? '{}') as Record<string, unknown>;
   } catch {
-    // unreadable package.json: fall back to conventional entries
+    return {}; // unreadable package.json: fall back to conventional entries
   }
-  const exp = json.exports;
-  const dot =
-    typeof exp === 'object' && exp !== null && !Array.isArray(exp) && '.' in exp ? exp['.'] : exp;
-  const declared = [json.types, dot, json.module, json.main].flatMap(targets).flatMap((p) => {
-    const rel = p.replace(/^\.\//, '');
-    const src = rel
-      .replace(/^(dist|build|lib|out)\//, 'src/')
-      .replace(/\.d\.[cm]?ts$|\.[cm]?js$/, '.ts');
-    return [src, src.replace(/\.ts$/, '.tsx'), rel];
-  });
-  const all = [...declared, 'src/index.ts', 'src/index.tsx', 'index.ts'];
+}
+
+/** Existing source files for declared targets: built outputs are mapped back to `src/`. */
+function sources(index: RepoIndex, dir: string, declared: string[]): string[] {
+  const root = index.root.replaceAll('\\', '/');
+  const rels = declared.map((p) => p.replace(/^\.\//, ''));
+  // Every source before any declared file: a `.d.ts` shim may re-export an unbuilt `dist/`.
+  const all = [
+    ...rels.flatMap((rel) => {
+      const src = rel
+        .replace(/^(dist|build|lib|out)\//, 'src/')
+        .replace(/\.d\.[cm]?ts$|\.[cm]?js$/, '.ts');
+      return [src, src.replace(/\.ts$/, '.tsx')];
+    }),
+    ...rels,
+  ];
   return [...new Set(all)]
     .map((p) => posix.join(dir, p))
     .filter((p) => index.files.hasFile(p))
     .map((p) => posix.join(root, p));
 }
 
-/** `paths` entries for every named workspace package (root package included). */
+/**
+ * `paths` entries for every named workspace package (root package included): the entry, each
+ * plain `exports` subpath (`pkg/config`), then a `pkg/*` fallback.
+ */
 function workspacePaths(ts: TS, index: RepoIndex): Record<string, string[]> {
   const root = index.root.replaceAll('\\', '/');
   const out: Record<string, string[]> = {};
   for (const pkg of index.packages.all) {
     if (!pkg.name) continue;
-    const found = entries(ts, index, pkg.dir);
+    const json = readJson(ts, posix.join(root, pkg.dir, 'package.json'));
+    const exp = json.exports;
+    const map =
+      typeof exp === 'object' && exp !== null && !Array.isArray(exp) && '.' in exp
+        ? (exp as Record<string, unknown>)
+        : { '.': exp };
+    const main = [json.types, map['.'], json.module, json.main].flatMap(targets);
+    const found = sources(index, pkg.dir, [...main, 'src/index.ts', 'src/index.tsx', 'index.ts']);
     if (found.length > 0) out[pkg.name] = found;
+    for (const [key, value] of Object.entries(map)) {
+      if (!key.startsWith('./') || key.includes('*') || key.endsWith('.json')) continue;
+      const sub = sources(index, pkg.dir, targets(value));
+      if (sub.length > 0) out[`${pkg.name}/${key.slice(2)}`] = sub;
+    }
     out[`${pkg.name}/*`] = [posix.join(root, pkg.dir, 'src/*'), posix.join(root, pkg.dir, '*')];
   }
   return out;

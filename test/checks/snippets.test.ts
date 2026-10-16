@@ -82,13 +82,24 @@ describe('snippets check', () => {
     expect(r?.finding).toMatchObject({ line: 22, col: 5 + 19 });
   });
 
-  it('fails a missing relative module but passes an uninstalled package', async () => {
-    const [missing, external] = await run({ 'tsconfig.json': TSCONFIG }, [
+  it('fails a missing module in a real dir, is unknown for an illustrative one', async () => {
+    const files = { 'tsconfig.json': TSCONFIG, 'src/format.ts': FORMAT };
+    const [gone, missing, illustrative, asset, external] = await run(files, [
+      snip("import { a } from './src/gone';"),
       snip("import { a } from './nope';"),
+      snip("import { a } from './path/to/module.js';\na(1, 2);"),
+      snip("import './app.css';\nconst n: number = 1;"),
       snip("import leftPad from 'left-pad';\nleftPad('x', 3);"),
     ]);
-    expect(missing?.status).toBe('fail');
-    expect(missing?.finding?.message).toContain('(TS2307)');
+    expect(gone?.status).toBe('fail');
+    expect(gone?.finding?.message).toContain('(TS2307)');
+    for (const r of [missing, illustrative]) {
+      expect(r).toMatchObject({
+        status: 'unknown',
+        reason: 'imports an illustrative relative module',
+      });
+    }
+    expect(asset?.status).toBe('pass');
     expect(external?.status).toBe('pass');
   });
 
@@ -147,6 +158,47 @@ describe('snippets check', () => {
     expect(ok?.resolvedFiles).toEqual(['packages/core/src/index.ts']);
     expect(bad?.status).toBe('fail');
     expect(bad?.finding?.message).toContain('(TS2305)');
+  });
+
+  it('only trusts a missing export in a snippet importing a workspace package', async () => {
+    const files = {
+      'tsconfig.json': TSCONFIG,
+      'package.json': '{"name":"root"}',
+      'packages/core/package.json': JSON.stringify({
+        name: '@acme/core',
+        exports: {
+          '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+          './config': { types: './config.d.ts', default: './dist/config.js' },
+          './package.json': './package.json',
+        },
+      }),
+      'packages/core/src/index.ts': 'export const expect = (v: unknown) => ({ v });\n',
+      'packages/core/src/config.ts': 'export const defineConfig = (c: object) => c;\n',
+      // A built-output shim: resolving to it would hide every export.
+      'packages/core/config.d.ts': "export * from './dist/config.js';\n",
+    };
+    const pkgs = [
+      { dir: '', name: 'root' },
+      { dir: 'packages/core', name: '@acme/core' },
+    ];
+    const [merged, sub, missing] = await run(
+      files,
+      [
+        // `.to` comes from declaration merging the source mapping cannot see.
+        snip("import { expect } from '@acme/core';\nexpect(true).to.be.true;"),
+        snip("import { defineConfig } from '@acme/core/config';\ndefineConfig({});"),
+        snip("import { defineConfg } from '@acme/core/config';"),
+      ],
+      pkgs,
+    );
+    expect(merged).toMatchObject({
+      status: 'unknown',
+      reason: 'imports a workspace package; its types may be incomplete',
+    });
+    expect(sub?.status).toBe('pass');
+    expect(sub?.resolvedFiles).toEqual(['packages/core/src/config.ts']);
+    expect(missing?.status).toBe('fail');
+    expect(missing?.finding?.message).toContain('(TS2724)');
   });
 
   it('works without a tsconfig using defaults', async () => {

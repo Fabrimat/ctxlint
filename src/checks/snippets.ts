@@ -2,12 +2,14 @@ import { posix } from 'node:path';
 import type { Diagnostic } from 'typescript';
 import { compilerOptions, findTsconfig, mappedPackages, virtualHost } from '../index/program.js';
 import type { TS } from '../index/program.js';
-import type { Check, CheckContext, CheckResult, Claim } from '../types.js';
+import type { Check, CheckContext, CheckResult, Claim, FileIndex } from '../types.js';
 import { docDir, fail, pass, unknown } from './result.js';
 
 /** Diagnostics that mean a snippet disagrees with the code; everything else is doc noise. */
 const DRIFT_CODES = new Set([2305, 2724, 2614, 2339, 2551, 2554, 2555, 2345, 2353, 2561]);
 const MISSING_MODULE = new Set([2307, 2792]);
+const MISSING_EXPORT = new Set([2305, 2724]);
+const CODE_EXT = /^(\.[cm]?[jt]sx?)?$/;
 
 const OPT_OUT = /\b(ignore|nocheck|ctxtruth-ignore)\b/;
 // ponytail: textual elision test (`...` before a closer/EOL, `/* ... */`, `// ...`); a real AST
@@ -31,16 +33,58 @@ function isWorkspaceName(spec: string, names: string[]): boolean {
   return names.some((n) => spec === n || spec.startsWith(`${n}/`));
 }
 
+/** The module a diagnostic names: `Cannot find module 'x'`, `'"x"' has no exported member`. */
+function specOf(ts: TS, d: Diagnostic): string | undefined {
+  const text = ts.flattenDiagnosticMessageText(d.messageText, ' ');
+  const m = /Cannot find module '([^']+)'|'"([^"]+)"' has no exported member/.exec(text);
+  return m?.[1] ?? m?.[2];
+}
+
+const RELATIVE = /^\.\.?\//;
+
 function keep(ts: TS, d: Diagnostic, names: string[]): boolean {
   if (DRIFT_CODES.has(d.code)) return true;
   if (!MISSING_MODULE.has(d.code)) return false;
-  const spec = /Cannot find module '([^']+)'/.exec(
-    ts.flattenDiagnosticMessageText(d.messageText, ' '),
-  )?.[1];
+  const spec = specOf(ts, d);
   if (spec === undefined) return false;
   // Relative assets (`./app.css`) are bundler business, not code drift.
-  if (/^\.\.?\//.test(spec)) return /^(\.[cm]?[jt]sx?)?$/.test(posix.extname(spec));
+  if (RELATIVE.test(spec)) return CODE_EXT.test(posix.extname(spec));
   return isWorkspaceName(spec, names);
+}
+
+/**
+ * The diagnostics that are drift, or why the snippet cannot be judged. `names` are the mapped
+ * workspace specifiers, `workspace` every workspace package name.
+ */
+function drift(
+  ts: TS,
+  all: Diagnostic[],
+  imports: string[],
+  names: string[],
+  workspace: string[],
+  where: { dir: string; files: FileIndex },
+): Diagnostic[] | string {
+  const { dir: base, files } = where;
+  // `./module.js`, `./path/to/module`: illustrative unless its directory exists (`./src/gone.ts`).
+  // Relative assets (`./app.css`) are bundler business.
+  const relative = all.some((d) => {
+    const spec = specOf(ts, d) ?? '';
+    if (!MISSING_MODULE.has(d.code) || !RELATIVE.test(spec)) return false;
+    const dir = posix.normalize(posix.join(base, posix.dirname(spec)));
+    const real = posix.dirname(spec) !== '.' && files.hasDir(dir === '.' ? '' : dir);
+    return CODE_EXT.test(posix.extname(spec)) && !real;
+  });
+  if (relative) return 'imports an illustrative relative module';
+  const kept = all.filter((d) => keep(ts, d, names));
+  if (!imports.some((s) => isWorkspaceName(s, workspace))) return kept;
+  // Workspace packages map to their sources, so declaration merging (chai's `expect().to`) and
+  // build-time types are missing: only a missing export of a mapped module is sure.
+  const sure = kept.filter(
+    (d) => MISSING_EXPORT.has(d.code) && names.includes(specOf(ts, d) ?? ''),
+  );
+  return sure.length === 0 && kept.length > 0
+    ? 'imports a workspace package; its types may be incomplete'
+    : sure;
 }
 
 /** Repo files (outside node_modules) the snippet's imports resolve to. */
@@ -99,6 +143,7 @@ export const snippetsCheck: Check = {
     const ts = (await import('typescript')).default;
     const root = ctx.index.root.replaceAll('\\', '/');
     const names = mappedPackages(ts, ctx.index);
+    const workspace = ctx.index.packages.all.flatMap((p) => (p.name ? [p.name] : []));
     const results = new Map<Claim, CheckResult>();
     const groups = new Map<string, Prepared[]>();
 
@@ -131,10 +176,17 @@ export const snippetsCheck: Check = {
           results.set(p.claim, unknown(p.claim, 'snippets', 'not valid TypeScript'));
           continue;
         }
-        const diags = program
-          .getSemanticDiagnostics(sf)
-          .filter((d) => d.start !== undefined && keep(ts, d, names))
-          .sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+        const all = program.getSemanticDiagnostics(sf).filter((d) => d.start !== undefined);
+        const imports = ts.preProcessFile(p.text).importedFiles.map((f) => f.fileName);
+        const diags = drift(ts, all, imports, names, workspace, {
+          dir: docDir(p.claim.file),
+          files: ctx.index.files,
+        });
+        if (typeof diags === 'string') {
+          results.set(p.claim, unknown(p.claim, 'snippets', diags));
+          continue;
+        }
+        diags.sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
         const files = resolvedFiles(ts, p, options, host, root);
         results.set(
           p.claim,
