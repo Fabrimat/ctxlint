@@ -2,6 +2,7 @@ import type * as Sdk from '@anthropic-ai/sdk';
 import type { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { ZodError } from 'zod';
 import type { LlmFailure, LlmProvider, LlmRequest, LlmResponse, LlmUsage } from './provider.js';
+import { unbilled } from './provider.js';
 
 type Format = ReturnType<typeof zodOutputFormat>;
 
@@ -77,12 +78,13 @@ export class AnthropicProvider implements LlmProvider {
       detail: string,
       usage: LlmUsage | null = null,
       model = req.model,
+      sent = reason !== 'no-key',
     ): LlmResponse<T> => ({
       ok: false,
       reason,
       detail,
       usage,
-      sent: reason !== 'no-key',
+      sent,
       model,
       latencyMs: latencyMs(),
     });
@@ -111,7 +113,7 @@ export class AnthropicProvider implements LlmProvider {
       };
     } catch (err) {
       const [reason, detail] = this.classify(err);
-      return fail(reason, detail);
+      return fail(reason, detail, null, req.model, reason !== 'no-key' && !unbilled(err));
     }
   }
 

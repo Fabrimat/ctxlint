@@ -2,6 +2,7 @@ import type * as Sdk from 'openai';
 import type { zodTextFormat } from 'openai/helpers/zod';
 import { ZodError } from 'zod';
 import type { LlmFailure, LlmProvider, LlmRequest, LlmResponse, LlmUsage } from './provider.js';
+import { unbilled } from './provider.js';
 
 type Format = ReturnType<typeof zodTextFormat>;
 
@@ -111,7 +112,8 @@ export class OpenAiProvider implements LlmProvider {
       if (err instanceof sdk.AuthenticationError) {
         return fail('error', 'OPENAI_API_KEY was rejected', null, req.model, false);
       }
-      if (err instanceof sdk.APIError) return fail('error', message);
+      if (err instanceof sdk.APIError)
+        return fail('error', message, null, req.model, !unbilled(err));
       if (err instanceof ZodError || err instanceof SyntaxError) return fail('invalid', message);
       return fail('error', message);
     }

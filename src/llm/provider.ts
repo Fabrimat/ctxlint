@@ -41,6 +41,15 @@ export interface LlmProvider {
 const DEFAULT_MODELS = { classify: 'claude-haiku-5-5', fix: 'claude-opus-5-5' } as const;
 
 /** The configured model for a task; null when there is none (OpenAI has no defaults). */
+/** API errors the provider does not bill (rejected before generation): their reservation is released. */
+export function unbilled(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  return (
+    typeof status === 'number' &&
+    (status === 400 || status === 401 || status === 403 || status === 429 || status >= 500)
+  );
+}
+
 export function modelFor(llm: LlmConfig, task: LlmRequest<unknown>['task']): string | null {
   return llm.models[task] ?? (llm.provider === 'anthropic' ? DEFAULT_MODELS[task] : null);
 }

@@ -157,6 +157,21 @@ describe('AnthropicProvider', () => {
     });
   });
 
+  it('marks unbilled API errors (429, 5xx) as not sent, and others as sent', async () => {
+    const thrown = (err: unknown) =>
+      anthropic(async () => {
+        throw err;
+      }).provider.complete(req());
+    const limited = new anthropicSdk.RateLimitError(429, undefined, 'slow', new Headers());
+    expect(await thrown(limited)).toMatchObject({ reason: 'error', sent: false });
+    const overloaded = new anthropicSdk.InternalServerError(529, undefined, 'busy', new Headers());
+    expect(await thrown(overloaded)).toMatchObject({ reason: 'error', sent: false });
+    expect(await thrown(new anthropicSdk.APIConnectionTimeoutError())).toMatchObject({
+      reason: 'timeout',
+      sent: true,
+    });
+  });
+
   it('maps the missing-credentials error of the SDK to no-key without a key', async () => {
     const { provider } = anthropic(async () => {
       throw new Error('Could not resolve authentication method.');
@@ -248,7 +263,7 @@ describe('OpenAiProvider', () => {
     ).toMatchObject({ reason: 'error', detail: 'OPENAI_API_KEY was rejected' });
     expect(
       await fail(new openaiSdk.RateLimitError(429, undefined, 'slow', new Headers())),
-    ).toMatchObject({ reason: 'error' });
+    ).toMatchObject({ reason: 'error', sent: false });
   });
 });
 
