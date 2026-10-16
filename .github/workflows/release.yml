@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build and verify without publishing, releasing or moving tags.
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      - name: Verify the tag matches package.json
+        if: env.DRY_RUN != 'true'
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$REF_TYPE" != "tag" ] || [ "$REF_NAME" != "v$version" ]; then
+            echo "::error::Ref '$REF_NAME' ($REF_TYPE) is not the tag v$version from package.json."
+            exit 1
+          fi
+
+      - name: Check the package contents
+        if: env.DRY_RUN == 'true'
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        if: env.DRY_RUN != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Create the GitHub release
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          awk -v v="$version" '
+            /^## \[/ { if (on) exit; on = index($0, "## [" v "]") == 1; next }
+            on
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::No CHANGELOG section for $version."
+            exit 1
+          fi
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+
+      - name: Move the major tag
+        if: env.DRY_RUN != 'true'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          major="${TAG#v}"
+          major="v${major%%.*}"
+          git tag -f "$major" HEAD
+          git push -f origin "refs/tags/$major"
