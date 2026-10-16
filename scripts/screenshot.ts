@@ -1,8 +1,8 @@
 // Renders a real colored run of `ctxtruth check` on the drift fixture as an SVG terminal shot:
 // pnpm build && node scripts/screenshot.ts > media/drift-run.svg
 import { execFileSync } from 'node:child_process';
-/* eslint-disable no-control-regex -- parsing ANSI escape sequences is the point */
 import { join } from 'node:path';
+/* eslint-disable no-control-regex -- parsing ANSI escape sequences is the point */
 
 const root = join(import.meta.dirname, '..');
 let out: string;
