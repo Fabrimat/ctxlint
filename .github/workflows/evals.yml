@@ -1,0 +1,44 @@
+name: Evals
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/llm/**'
+      - 'evals/**'
+
+permissions:
+  contents: read
+
+jobs:
+  semantic:
+    # Pull requests run only with the `run-evals` label; a manual dispatch always runs.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-evals')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run the semantic evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::notice::ANTHROPIC_API_KEY is not set, skipping the evals"
+            echo "Evals skipped: no ANTHROPIC_API_KEY secret." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Report only: no accuracy gate until there is a baseline.
+          node evals/run.ts --repeats 3 --max-cost 5 | tee evals-output.md
+          cat evals-output.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: evals/results/
+          if-no-files-found: ignore
