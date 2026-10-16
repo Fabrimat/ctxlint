@@ -18,9 +18,9 @@ afterEach(() => {
 });
 
 /** Base commit on branch `base`, then a code change that contradicts the doc. */
-function repo() {
+function repo(prefix = '') {
   const r = makeTmpRepo(
-    { 'AGENTS.md': DOC, 'src/server.ts': 'export const PORT = 3000;\n' },
+    { [`${prefix}AGENTS.md`]: DOC, [`${prefix}src/server.ts`]: 'export const PORT = 3000;\n' },
     { git: true },
   );
   repos.push(r);
@@ -28,7 +28,7 @@ function repo() {
   r.git('add', '-A');
   r.git('commit', '-q', '-m', 'base');
   r.git('branch', 'base');
-  writeFileSync(join(r.dir, 'src/server.ts'), 'export const PORT = 8080;\n');
+  writeFileSync(join(r.dir, `${prefix}src/server.ts`), 'export const PORT = 8080;\n');
   r.git('commit', '-q', '-am', 'change the port');
   return r;
 }
@@ -116,6 +116,25 @@ describe('check --llm', { timeout: 60_000 }, () => {
       '+The server in `src/server.ts` listens on port 8080.',
     );
     expect(r.git('status', '--porcelain').toString()).toBe('');
+  });
+
+  it('writes repo-relative patch paths for a root in a subdirectory', async () => {
+    const r = repo('pkg/');
+    const root = join(r.dir, 'pkg');
+    const patch = join(r.dir, '.git', 'fix.patch');
+    await run(root, { llm: llm(new FakeProvider(answer), { fix: true, patch }) });
+    expect(readFileSync(patch, 'utf8')).toContain('+++ b/pkg/AGENTS.md');
+    execFileSync('git', ['-C', r.dir, 'apply', '--check', patch]);
+    execFileSync('git', ['-C', root, 'apply', '--check', patch]);
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toBe(DOC);
+  });
+
+  it('names the base ref, not a flag, when there is no git repository', async () => {
+    const dir = makeTmpRepo({ 'AGENTS.md': DOC, 'src/server.ts': '' });
+    repos.push(dir);
+    await expect(
+      run(dir.dir, { llm: llm(new FakeProvider(answer), { scope: 'all' }) }),
+    ).rejects.toThrow(/^comparing with a base ref needs a git repository/);
   });
 
   it('skips the sections over a tiny --max-cost and reports them', async () => {
