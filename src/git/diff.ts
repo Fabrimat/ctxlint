@@ -50,11 +50,11 @@ export async function resolveBase(root: string, ref: string): Promise<BaseCommit
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new Error(
-        '--changed-only and --new-only need git, which is not installed or not on PATH',
+        'comparing with a base ref needs git, which is not installed or not on PATH',
         { cause: err },
       );
     }
-    throw new Error(`--changed-only and --new-only need a git repository, ${root} is not one`, {
+    throw new Error(`comparing with a base ref needs a git repository, ${root} is not one`, {
       cause: err,
     });
   }
