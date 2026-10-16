@@ -25,28 +25,27 @@ async function run(args: string[], io: Partial<CliIO> = {}) {
 
 const normalise = (s: string): string => s.replace(/\d+ ms/, '<N> ms');
 
-const DRIFT_TEXT = `AGENTS.md  freshness 23% (3/13)
-  6:31   error    Path \`src/utils/format.ts\` does not exist (did you mean \`src/utils/formatting.ts\`?)           paths
+const DRIFT_TEXT = `AGENTS.md  freshness 25% (3/12)
+  6:31   error    Path \`src/utils/format.ts\` does not exist (did you mean \`src/utils/formatting.ts\`?)        paths
                   suggestion: src/utils/formatting.ts
-  7:33   error    Path \`src/old/config.ts\` does not exist (moved to \`src/config.ts\`?)                           paths
+  7:33   error    Path \`src/old/config.ts\` does not exist (moved to \`src/config.ts\`?)                        paths
                   suggestion: src/config.ts
-  16:10  error    Script \`typecheck\` is not defined in \`package.json\`                                           scripts
-  17:9   error    Script \`buidl\` is not defined in \`package.json\` (did you mean \`build\`?)                       scripts
+  16:10  error    Script \`typecheck\` is not defined in \`package.json\`                                        scripts
+  17:9   error    Script \`buidl\` is not defined in \`package.json\` (did you mean \`build\`?)                    scripts
                   suggestion: build
-  18:6   warning  Script \`dev\` is not defined in \`package.json\` (it is defined in \`packages/web/package.json\`)  scripts
-  19:11  warning  Command \`tsx\` is not installed as a dependency                                                commands
-  31:31  warning  Symbol \`formatTimeStamp\` is not defined in the codebase (did you mean \`formatTimestamp\`?)     symbols
+  19:11  warning  Command \`tsx\` is not installed as a dependency                                             commands
+  31:31  warning  Symbol \`formatTimeStamp\` is not defined in the codebase (did you mean \`formatTimestamp\`?)  symbols
                   suggestion: formatTimestamp
-  32:9   warning  \`Config\` has no member \`reload\`                                                               symbols
-  33:28  warning  Docs say \`zod@3\` but \`package.json\` requires \`^4.1.0\`                                         versions
+  32:9   warning  \`Config\` has no member \`reload\`                                                            symbols
+  33:28  warning  Docs say \`zod@3\` but \`package.json\` requires \`^4.1.0\`                                      versions
                   suggestion: zod@4
-  38:29  error    Snippet does not type-check: Expected 1 arguments, but got 2. (TS2554)                        snippets
+  38:29  error    Snippet does not type-check: Expected 1 arguments, but got 2. (TS2554)                     snippets
 
 docs/guide.md  freshness 67% (2/3)
   5:24  error  Path \`../src/old/config.ts\` does not exist (moved to \`src/config.ts\`?)  paths
                suggestion: src/config.ts
 
-✖ 6 errors, 5 warnings · 24 claims · 10 verified · 3 unknown · freshness 48% · <N> ms
+✖ 6 errors, 4 warnings · 24 claims · 10 verified · 4 unknown · freshness 50% · <N> ms
 `;
 
 describe('ctxtruth check', () => {
@@ -197,7 +196,7 @@ describe('ctxtruth check', () => {
   describe('format selection', () => {
     it('defaults to the agent format when a coding agent runs the command', async () => {
       const { out } = await run(['check', '--root', drift], { env: { CLAUDECODE: '1' } });
-      expect(out).toMatch(/^ctxtruth: 11 stale claims in 2 files./);
+      expect(out).toMatch(/^ctxtruth: 10 stale claims in 2 files./);
     });
 
     it('lets CTXTRUTH_FORMAT and --format override the default', async () => {

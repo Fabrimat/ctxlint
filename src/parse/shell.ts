@@ -1,3 +1,4 @@
+import { posix } from 'node:path';
 import { inlinePath } from './paths.js';
 import { packageSpec } from './versions.js';
 
@@ -339,10 +340,44 @@ const NONE: Adopted = new Map();
  * Extracts script, command and path claims from one logical shell line, and `custom` claims for
  * binaries a plugin adopted.
  */
-export function parseShellLine(line: string, adopted: Adopted = NONE): Extracted[] {
+export function parseShellLine(
+  line: string,
+  adopted: Adopted = NONE,
+  shell: ShellState = {},
+): Extracted[] {
   // Substitutions and heredocs hide the real command structure: precision over recall.
   if (/\$\(|`|<</.test(line)) return [];
-  return splitCommands(tokenize(line)).flatMap((cmd) => classify(cmd, line, adopted));
+  const outer = shell.cwd;
+  const out = splitCommands(tokenize(line)).flatMap((cmd) => {
+    const h = head(cmd);
+    if (h?.name === 'cd') {
+      const [to] = h.rest;
+      // `cd`, `cd ~`, `cd $DIR`, `cd -`, `cd /abs`: somewhere we cannot follow.
+      const plain = to !== undefined && !/^[~$/-]/.test(to.text) && shell.cwd !== null;
+      shell.cwd = plain ? posix.normalize(posix.join(shell.cwd ?? '', to.text)) : null;
+      return [];
+    }
+    return classify(cmd, line, adopted).flatMap((c) => moved(c, shell.cwd));
+  });
+  // A subshell `(cd x && ...)` does not move the lines after it.
+  if (/^\s*\(/.test(line)) shell.cwd = outer;
+  return out;
+}
+
+/** Where a fence has `cd`-ed to: a doc- or root-relative dir, `null` once it cannot be followed. */
+export interface ShellState {
+  cwd?: string | null | undefined;
+}
+
+/** A claim after `cd`: scripts run in that dir; relative paths and lost dirs are dropped. */
+function moved(c: Extracted, cwd: string | null | undefined): Extracted[] {
+  if (cwd === undefined || c.kind === 'command' || c.kind === 'custom' || c.kind === 'version') {
+    return [c];
+  }
+  if (c.kind === 'script' && c.meta?.filter !== undefined) return [c];
+  if (c.kind !== 'script' || cwd === null) return [];
+  const dir = posix.normalize(posix.join(cwd, c.meta?.dir ?? '.'));
+  return [{ ...c, meta: { ...c.meta, dir, cd: 'true' } }];
 }
 
 /** The binary of the first command of `line`, as `parseShellLine` sees it. */

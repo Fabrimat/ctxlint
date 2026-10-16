@@ -175,8 +175,9 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
       const indent = raw.endsWith(text) ? raw.length - text.length : 0;
       return { text, line: first + 1 + i, col: indent + 1 };
     });
+    const shell = {}; // a `cd` holds for the rest of the fence
     for (const logical of logicalLines(pieces, CONSOLE_LANGS.has(lang))) {
-      for (const c of parseShellLine(logical.text, adopted)) {
+      for (const c of parseShellLine(logical.text, adopted, shell)) {
         add(c.kind, c.value, logical.locate(c.index), 'fence', c.meta);
       }
     }

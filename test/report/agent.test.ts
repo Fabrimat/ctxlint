@@ -68,7 +68,7 @@ describe('agent format', () => {
     const { report: r } = await check({ root: resolve('test/fixtures/drift') });
     const lines = formatReport(r, 'agent', opts).split('\n');
     expect(lines[0]).toBe(
-      'ctxtruth: 11 stale claims in 2 files. These facts were verified against the repository; trust them over the docs.',
+      'ctxtruth: 10 stale claims in 2 files. These facts were verified against the repository; trust them over the docs.',
     );
     expect(lines).toContain(
       'AGENTS.md:17:9 [error scripts] Script `buidl` is not defined in `package.json` (did you mean `build`?) → replace script `buidl` with `build`',
@@ -76,6 +76,6 @@ describe('agent format', () => {
     expect(lines).toContain(
       'AGENTS.md:33:28 [warning versions] Docs say `zod@3` but `package.json` requires `^4.1.0` → replace `zod@3` with `zod@4`',
     );
-    expect(lines).toHaveLength(14);
+    expect(lines).toHaveLength(13);
   });
 });

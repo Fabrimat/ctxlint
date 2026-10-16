@@ -47,15 +47,6 @@ describe('check() on the drift fixture', () => {
     },
     {
       file: 'AGENTS.md',
-      line: 18,
-      col: 6,
-      checkId: 'scripts',
-      severity: 'warning',
-      message:
-        'Script `dev` is not defined in `package.json` (it is defined in `packages/web/package.json`)',
-    },
-    {
-      file: 'AGENTS.md',
       line: 19,
       col: 11,
       checkId: 'commands',
@@ -119,14 +110,14 @@ describe('check() on the drift fixture', () => {
       files: 3,
       claims: 24,
       pass: 10,
-      fail: 11,
-      unknown: 3,
+      fail: 10,
+      unknown: 4,
       errors: 6,
-      warnings: 5,
+      warnings: 4,
     });
-    expect(report.summary.freshness).toBeCloseTo(10 / 21);
+    expect(report.summary.freshness).toBeCloseTo(10 / 20);
     expect(report.files.map((f) => [f.file, f.freshness])).toEqual([
-      ['AGENTS.md', 3 / 13],
+      ['AGENTS.md', 3 / 12],
       ['CLAUDE.md', 1],
       ['docs/guide.md', 2 / 3],
     ]);
@@ -141,6 +132,7 @@ describe('check() on the drift fixture', () => {
     expect(unknowns).toEqual([
       ['dist', 'gitignored'],
       ['react-dom/client', 'not a repository path'],
+      ['dev', 'defined in `packages/web/package.json`; may be run from there'],
       ['git', 'system binary'],
     ]);
   });

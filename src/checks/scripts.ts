@@ -39,7 +39,14 @@ function targets(claim: Claim, ctx: CheckContext): PackageInfo[] | CheckResult {
     return hit ? [hit] : unknown(claim, 'scripts', `no package at ${dir}`);
   }
   if (recursive === 'true') return all;
-  return [nearest(docDir(claim.file), all)];
+  const near = nearest(docDir(claim.file), all);
+  // `docs/package.json` outside the workspaces: its scripts are not indexed.
+  for (let d = docDir(claim.file); d !== near.dir && d !== ''; d = docDir(d)) {
+    if (ctx.index.files.hasFile(packageJsonPath(d))) {
+      return unknown(claim, 'scripts', `${packageJsonPath(d)} is not a workspace package`);
+    }
+  }
+  return [near];
 }
 
 export const scriptsCheck: Check = {
@@ -66,9 +73,29 @@ export const scriptsCheck: Check = {
           'package.json',
         ]);
       }
-      const other = all.find((p) => !target.includes(p) && Object.hasOwn(p.scripts, name));
+      const others = all.filter((p) => !target.includes(p) && Object.hasOwn(p.scripts, name));
+      const [other] = others;
       if (other) {
         const where = packageJsonPath(other.dir);
+        // Only defined below the doc's package (`packages/ai`): docs say "run it from there".
+        const base = target[0]?.dir ?? '';
+        const below = others.every((p) => base === '' || p.dir.startsWith(`${base}/`));
+        if (
+          filter === undefined &&
+          dir === undefined &&
+          claim.meta?.recursive !== 'true' &&
+          below
+        ) {
+          return unknown(claim, 'scripts', `defined in \`${where}\`; may be run from there`, [
+            where,
+          ]);
+        }
+        // A fence's `cd` is followed line by line, but its prose may switch terminals.
+        if (claim.meta?.cd === 'true') {
+          return unknown(claim, 'scripts', `defined in \`${where}\`; may be run from there`, [
+            where,
+          ]);
+        }
         return fail(
           claim,
           'scripts',

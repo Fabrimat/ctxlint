@@ -113,8 +113,8 @@ describe('scripts check', () => {
     });
   });
 
-  it('missing in target but defined elsewhere is always a warning', async () => {
-    const c = claim('dev');
+  it('missing in target but defined in a sibling is always a warning', async () => {
+    const c = claim('dev', { file: 'packages/bar/AGENTS.md' });
     const strict = makeCtx(ctx.index, 'error');
     expect(await scriptsCheck.run([c], strict)).toEqual([
       {
@@ -128,9 +128,9 @@ describe('scripts check', () => {
           checkId: 'scripts',
           severity: 'warning',
           message:
-            'Script `dev` is not defined in `package.json` (it is defined in `packages/foo/package.json`)',
+            'Script `dev` is not defined in `packages/bar/package.json` (it is defined in `packages/foo/package.json`)',
         },
-        resolvedFiles: ['package.json'],
+        resolvedFiles: ['packages/bar/package.json'],
       },
     ]);
   });
@@ -150,6 +150,37 @@ describe('scripts check', () => {
     );
     const filtered = claim('build', { meta: { filter: '@acme/foo' } });
     expect((await run(filtered)).status).toBe('fail');
+  });
+
+  it('is unknown for a script only a package below the doc defines', async () => {
+    expect(await run(claim('dev'))).toMatchObject({
+      status: 'unknown',
+      reason: 'defined in `packages/foo/package.json`; may be run from there',
+    });
+    // An explicit target is sure.
+    expect((await run(claim('dev', { meta: { filter: 'root' } }))).status).toBe('fail');
+  });
+
+  it('is unknown after a fence `cd` when another package defines the script', async () => {
+    const c = claim('build', { meta: { pm: 'yarn', dir: 'packages/bar', cd: 'true' } });
+    expect((await run(c)).status).toBe('unknown');
+    const missing = claim('nope', { meta: { pm: 'yarn', dir: 'packages/bar', cd: 'true' } });
+    expect((await run(missing)).status).toBe('fail');
+  });
+
+  it('is unknown in a doc whose own package.json is not a workspace', async () => {
+    const index = makeIndex({
+      files: ['package.json', 'docs/package.json'],
+      packages: [{ dir: '', scripts: { build: 'tsc' } }],
+    });
+    const [r] = await scriptsCheck.run(
+      [claim('serve', { file: 'docs/AGENTS.md' })],
+      makeCtx(index),
+    );
+    expect(r).toMatchObject({
+      status: 'unknown',
+      reason: 'docs/package.json is not a workspace package',
+    });
   });
 
   it('missing everywhere uses ctx severity and suggests a near name', async () => {

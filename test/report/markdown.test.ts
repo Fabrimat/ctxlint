@@ -161,7 +161,7 @@ describe('markdown format', () => {
     const { report: r } = await check({ root: resolve('test/fixtures/drift') });
     const out = formatReport(r, 'markdown', opts);
     expect(out.startsWith('<!-- ctxtruth-report -->\n### ctxtruth\n')).toBe(true);
-    expect(out).toContain('**11** documentation claims are false (6 errors, 5 warnings).');
+    expect(out).toContain('**10** documentation claims are false (6 errors, 4 warnings).');
     expect(out).toContain('**docs/guide.md**');
   });
 });

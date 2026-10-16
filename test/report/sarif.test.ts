@@ -83,7 +83,7 @@ describe('sarif format', () => {
   it('formats the drift fixture', async () => {
     const { report: r } = await check({ root: resolve('test/fixtures/drift') });
     const run = parse(formatReport(r, 'sarif', opts)).runs[0];
-    expect(run.results).toHaveLength(11);
+    expect(run.results).toHaveLength(10);
     expect(run.tool.driver.rules.map((x) => x.id)).toEqual([
       'commands',
       'paths',

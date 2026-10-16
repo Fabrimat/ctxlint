@@ -267,7 +267,7 @@ describe('false-positive guards', () => {
     ['pnpm run build --reporter x', [script('build', { pm: 'pnpm' })]],
     ['npm --prefix app run build', []],
     ['npx --node-arg x prettier', []],
-    ['(cd x && npm run y)', [script('y', { pm: 'npm' })]],
+    ['(cd x && npm run y)', [script('y', { pm: 'npm', dir: 'x', cd: 'true' })]],
     ['{ npm run a; }', [script('a', { pm: 'npm' })]],
     ['echo $(npm run x)', []],
     ['out=`npm run x`', []],
@@ -295,7 +295,14 @@ describe('false-positive guards', () => {
 
   it('positions survive group trimming', () => {
     expect(parseMarkdown(fenced('sh', '(cd x && npm run y)'), 'AGENTS.md')).toEqual([
-      claim({ kind: 'script', value: 'y', line: 2, col: 18, meta: { pm: 'npm' }, source: 'fence' }),
+      claim({
+        kind: 'script',
+        value: 'y',
+        line: 2,
+        col: 18,
+        meta: { pm: 'npm', dir: 'x', cd: 'true' },
+        source: 'fence',
+      }),
     ]);
   });
 
@@ -366,6 +373,39 @@ describe('install version claims', () => {
     expect(claims.map((c) => line.slice(c.index, c.index + c.value.length))).toEqual([
       'zod@3',
       'react@18',
+    ]);
+  });
+});
+
+describe('cd in a fence', () => {
+  const claims = (...body: string[]) =>
+    parseMarkdown(fenced('sh', ...body), 'AGENTS.md').map(({ kind, value, meta }) => ({
+      kind,
+      value,
+      meta,
+    }));
+
+  it('runs later scripts in the dir it moved to', () => {
+    expect(claims('cd examples/app', 'yarn develop', 'cd ../web && pnpm run dev', 'make')).toEqual([
+      script('develop', { pm: 'yarn', implicit: 'true', dir: 'examples/app', cd: 'true' }),
+      script('dev', { pm: 'pnpm', dir: 'examples/web', cd: 'true' }),
+      command('make'),
+    ]);
+  });
+
+  it('drops scripts and relative paths once it cannot follow the dir', () => {
+    expect(claims('cd $PROJECT', 'npm run build', './run.sh', 'git status')).toEqual([
+      command('git'),
+    ]);
+    expect(claims('cd docs', './scripts/x.sh', 'pnpm --filter web build')).toEqual([
+      script('build', { pm: 'pnpm', implicit: 'true', filter: 'web' }),
+    ]);
+  });
+
+  it('keeps a subshell cd to its own line', () => {
+    expect(claims('(cd x && npm run y)', 'npm run z')).toEqual([
+      script('y', { pm: 'npm', dir: 'x', cd: 'true' }),
+      script('z', { pm: 'npm' }),
     ]);
   });
 });
