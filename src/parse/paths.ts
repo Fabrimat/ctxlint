@@ -7,6 +7,8 @@ const EXT =
   'ts|tsx|mts|cts|js|jsx|mjs|cjs|json|jsonc|md|mdx|mdc|yml|yaml|toml|css|scss|html|sh|ps1|txt|lock';
 const BARE_FILE = new RegExp(String.raw`^[\w.-]+\.(?:${EXT})$`, 'i');
 const ENDS_WITH_EXT = new RegExp(String.raw`\.(?:${EXT})$`, 'i');
+/** `.json`, `.d.ts`, `.test.ts`: a file extension, not a file (`.eslintrc.json` still is one). */
+const EXTENSION_ONLY = new RegExp(String.raw`^\.(?:(?:d|test|spec|min)\.)?(?:${EXT})$`, 'i');
 const SEGMENT = /^[A-Za-z0-9._@+-]+$/;
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const VERSION = /^[v^~]?\d+\.\d+(?:\.\d+)?(?:[-+][\w.]+)?$/i;
@@ -44,7 +46,7 @@ export function inlinePath(raw: string): PathParts | null {
   if (/\s/.test(raw)) return null;
   const s = stripSuffixes(raw);
   if (/^[@\-~$]|^\/\//.test(s) || SCHEME.test(s) || /[*?[\]{}<>]/.test(s)) return null;
-  if (VERSION.test(s)) return null;
+  if (VERSION.test(s) || EXTENSION_ONLY.test(s)) return null;
   const lower = s.toLowerCase();
   if (PLACEHOLDERS.some((p) => lower.includes(p))) return null;
   if (!s.includes('/') && !BARE_FILE.test(s)) return null;

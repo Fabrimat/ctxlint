@@ -39,6 +39,9 @@ const FENCE_LANGS = new Set(['sh', 'bash', 'shell', 'zsh', 'console', 'shellsess
 const CONSOLE_LANGS = new Set(['console', 'shellsession']);
 const SNIPPET_LANGS = new Set(['ts', 'typescript', 'tsx', 'mts', 'cts']);
 const PACKAGE_MANAGER_COMMAND = /^(?:npm|pnpm|yarn|bun|npx)(?=\s|$)/;
+// ponytail: word test on the claim's line or list item; misses a "generated" said a paragraph away.
+const GENERATED =
+  /\b(?:(?:auto-?)?generated|generates?|create[sd]?|created by|written by|output of|build output)\b/i;
 const FRONTMATTER = /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
 /** Empties a leading YAML frontmatter block but keeps its line breaks, so line numbers hold. */
@@ -70,6 +73,9 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
     return { line: i + 1, col: offset - (lineStarts[i] as number) + 1 };
   };
 
+  /** Source text of the innermost list item being visited. */
+  let item = '';
+
   const add = (
     kind: ClaimKind,
     value: string,
@@ -77,6 +83,10 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
     source: ClaimSource,
     meta?: Record<string, string>,
   ): void => {
+    // A file the docs say is generated or created may legitimately be missing from the checkout.
+    if (kind === 'path' && (GENERATED.test(lines[pos.line - 1] ?? '') || GENERATED.test(item))) {
+      meta = { ...meta, generated: 'true' };
+    }
     claims.push({
       kind,
       value,
@@ -226,12 +236,17 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
     }
     if (!('children' in node)) return;
     let skip = false;
+    const outer = item;
+    if (node.type === 'listItem') {
+      item = src.slice(node.position?.start.offset, node.position?.end.offset);
+    }
     if (node.type === 'link') linkDepth++;
     for (const child of node.children) {
       visit(child, muted || skip);
       skip = child.type === 'html' && markerOf(child.value) === 'ignore';
     }
     if (node.type === 'link') linkDepth--;
+    item = outer;
   }
 
   visit(tree, false);

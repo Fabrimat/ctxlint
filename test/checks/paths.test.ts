@@ -185,3 +185,62 @@ describe('paths check: gitignored', () => {
     );
   });
 });
+
+describe('paths check: site links and generated files', () => {
+  const site = makeCtx(
+    makeIndex({
+      files: [
+        'README.md',
+        'docs/.vitepress/config.ts',
+        'docs/guide/index.md',
+        'docs/guide/reporters.md',
+        'docs/config/pool.md',
+        'site/api.md',
+      ],
+      sites: [{ dir: 'docs', kind: 'VitePress' }],
+    }),
+  );
+  const link = (value: string, file: string, meta?: Record<string, string>) =>
+    claim(value, { file, source: 'link', ...(meta && { meta }) });
+  const run = async (c: Claim) => (await pathsCheck.run([c], site))[0];
+
+  it('resolves an extensionless link to `<p>.md` or the directory of `<p>/index.md`', async () => {
+    expect(await run(link('../guide/reporters', 'docs/config/pool.md'))).toMatchObject({
+      status: 'pass',
+      resolvedFiles: ['docs/guide/reporters.md'],
+    });
+    expect((await run(link('guide', 'docs/x.md')))?.resolvedFiles).toEqual(['docs/guide']);
+  });
+
+  it('resolves a leading `/` from the site root, else from the top-level docs dir', async () => {
+    const rooted = link('config/pool', 'docs/guide/x.md', { anchor: 'root' });
+    expect((await run(rooted))?.resolvedFiles).toEqual(['docs/config/pool.md']);
+    const plain = makeCtx(makeIndex({ files: ['docs/config/pool.md'] }));
+    const [r] = await pathsCheck.run([rooted], plain);
+    expect(r?.resolvedFiles).toEqual(['docs/config/pool.md']);
+  });
+
+  it('is unknown for an unresolved site route, anywhere', async () => {
+    for (const c of [
+      link('config/gone', 'docs/guide/x.md', { anchor: 'root' }),
+      link('logo.svg', 'docs/guide/x.md', { anchor: 'root' }),
+      link('../guide/gone', 'docs/config/pool.md'),
+      link('site/gone', 'README.md'),
+    ]) {
+      expect(await run(c), c.value).toMatchObject({ status: 'unknown', reason: 'site route' });
+    }
+  });
+
+  it('still fails a missing file link with an extension, or extensionless inline code', async () => {
+    expect((await run(link('docs/gone.md', 'README.md')))?.status).toBe('fail');
+    expect((await run(link('logo.svg', 'README.md', { anchor: 'root' })))?.status).toBe('fail');
+    expect((await run(claim('docs/guide/gone/')))?.status).toBe('fail');
+  });
+
+  it('is unknown for a missing path the docs describe as generated', async () => {
+    const c = claim('docs/.vitepress/names.json', { meta: { generated: 'true' } });
+    expect(await run(c)).toMatchObject({ status: 'unknown', reason: 'described as generated' });
+    const there = claim('docs/.vitepress/config.ts', { meta: { generated: 'true' } });
+    expect((await run(there))?.status).toBe('pass');
+  });
+});

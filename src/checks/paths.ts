@@ -4,14 +4,20 @@ import { closest } from '../util/distance.js';
 import type { Check, CheckContext, CheckResult, Claim } from '../types.js';
 import { docDir, fail, pass, unknown } from './result.js';
 import { clean } from '../git/diff.js';
+import { siteOf } from '../index/sites.js';
+
+/** The dir a site link's leading `/` points at: the doc's site, else its top-level `docs/`. */
+function siteRoot(file: string, ctx: CheckContext): string | undefined {
+  return siteOf(file, ctx.index.sites)?.dir ?? (file.startsWith('docs/') ? 'docs' : undefined);
+}
 
 /** Candidate repo-relative resolutions in priority order; empty when all escape the repo. */
-function candidates(claim: Claim): string[] {
+function candidates(claim: Claim, site: string | undefined): string[] {
   const norm = (p: string) => posix.normalize(p).replace(/\/+$/, '');
   const fromRoot = norm(claim.value.replace(/^\/+/, ''));
   const out =
     claim.meta?.anchor === 'root'
-      ? [fromRoot]
+      ? [fromRoot, ...(site === undefined ? [] : [norm(posix.join(site, fromRoot))])]
       : [norm(posix.join(docDir(claim.file), claim.value)), fromRoot];
   return [...new Set(out)]
     .filter((p) => p !== '..' && !p.startsWith('../'))
@@ -98,7 +104,9 @@ export const pathsCheck: Check = {
   async run(claims, ctx) {
     const { files } = ctx.index;
     const results: (CheckResult | { claim: Claim; cands: string[] })[] = claims.map((claim) => {
-      const cands = candidates(claim);
+      const link = claim.source === 'link';
+      const site = link ? siteRoot(claim.file, ctx) : undefined;
+      const cands = candidates(claim, site);
       if (cands.length === 0) return unknown(claim, 'paths', 'outside repository');
       const found = cands.find((p) =>
         claim.meta?.dir === 'true'
@@ -106,6 +114,15 @@ export const pathsCheck: Check = {
           : p === '' || files.hasFile(p) || files.hasDir(p),
       );
       if (found !== undefined) return pass(claim, 'paths', [found]);
+      // Site links name pages without their extension: `/config/pool`, `../guide/reporters`
+      // (`<p>/index.md` already passed as the directory `<p>`).
+      const route = link && posix.extname(claim.value) === '';
+      const page = route ? cands.map((p) => `${p}.md`).find((p) => files.hasFile(p)) : undefined;
+      if (page !== undefined) return pass(claim, 'paths', [page]);
+      // In a site, `/x` is the site's URL root (public assets, generated pages), not the repo's.
+      if (route || (site !== undefined && claim.meta?.anchor === 'root')) {
+        return unknown(claim, 'paths', 'site route');
+      }
       // A bare filename (`config.ts`) usually names a file by basename, wherever it lives.
       if (!claim.value.includes('/') && claim.meta?.dir !== 'true') {
         const same = files.findByBasename(claim.value);
@@ -125,6 +142,9 @@ export const pathsCheck: Check = {
       const { claim, cands } = r;
       const [target = ''] = cands;
       if (cands.some((p) => ignored.has(p))) return unknown(claim, 'paths', 'gitignored', [target]);
+      if (claim.meta?.generated === 'true') {
+        return unknown(claim, 'paths', 'described as generated', [target]);
+      }
       const s = claim.meta?.dir === 'true' ? undefined : suggest(target, ctx);
       return fail(
         claim,
