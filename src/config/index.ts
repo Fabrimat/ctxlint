@@ -1,5 +1,7 @@
 export {
+  AGENT_TARGETS,
   configSchema,
+  DEFAULT_TARGETS,
   defaultConfig,
   defineConfig,
   type Config,

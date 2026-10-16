@@ -1,6 +1,8 @@
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { FORMATS, formatReport } from '../../src/report/index.js';
 import { check } from '../../src/run.js';
+import { makeTmpRepo } from '../helpers/tmp.js';
 import type { Finding } from '../../src/types.js';
 
 const fixture = (name: string): string => resolve(import.meta.dirname, '../fixtures', name);
@@ -185,5 +187,48 @@ describe('check() path narrowing', () => {
     const { report } = await check({ root, paths: ['nope/'], cwd: root });
     expect(report.files).toEqual([]);
     expect(report.summary.claims).toBe(0);
+  });
+});
+
+describe('check() on a repo with a documentation site', () => {
+  const files = {
+    'package.json': '{"name":"site-repo"}',
+    'README.md': 'See `src/gone.ts`.\n',
+    'docs/.vitepress/config.ts': 'export default {};\n',
+    'docs/guide.md': 'Create `./examples/simple` first, then open `src/missing.ts`.\n',
+    'docs/api.md': 'See `src/missing.ts`.\n',
+    'docs/AGENTS.md': 'Edit `docs/nope.ts`.\n',
+  };
+  const cleanups: (() => void)[] = [];
+  afterEach(() => cleanups.splice(0).forEach((c) => c()));
+  const repo = (extra: Record<string, string> = {}) => {
+    const r = makeTmpRepo({ ...files, ...extra });
+    cleanups.push(r.cleanup);
+    return r.dir;
+  };
+
+  it('skips the site pages by default but keeps its agent files, and says so', async () => {
+    const { report } = await check({ root: repo() });
+    expect(report.files.map((f) => f.file)).toEqual(['README.md', 'docs/AGENTS.md']);
+    expect(report.findings.map((f) => f.file)).toEqual(['README.md', 'docs/AGENTS.md']);
+    expect(report.skipped).toEqual([{ dir: 'docs', reason: 'VitePress site', files: 2 }]);
+    const line = 'skipped docs/ (VitePress site, 2 files); add it to `targets` to check it';
+    // JSON carries the structured `skipped` field instead.
+    for (const format of FORMATS.filter((f) => f !== 'json')) {
+      expect(formatReport(report, format, { color: false, verbose: false }), format).toContain(
+        line,
+      );
+    }
+  });
+
+  it('checks the site pages when the config names them', async () => {
+    const config = { 'ctxtruth.config.json': '{"targets":["docs/**/*.md"]}' };
+    const { report } = await check({ root: repo(config) });
+    expect(report.files.map((f) => f.file)).toEqual([
+      'docs/AGENTS.md',
+      'docs/api.md',
+      'docs/guide.md',
+    ]);
+    expect(report.skipped).toBeUndefined();
   });
 });

@@ -111,11 +111,21 @@ export interface PackageIndex {
   all: PackageInfo[];
 }
 
+/** A documentation-site root (VitePress, Docusaurus...): its pages describe the users' projects. */
+export interface Site {
+  /** Repo-relative POSIX dir, never the root. */
+  dir: string;
+  /** Generator name, e.g. `VitePress`. */
+  kind: string;
+}
+
 export interface RepoIndex {
   /** Absolute path of the repo root. */
   root: string;
   files: FileIndex;
   packages: PackageIndex;
+  /** Documentation-site roots, outermost only. */
+  sites: Site[];
   /**
    * Absolute root whose `node_modules` serve TypeScript resolution. Set when checking a base
    * worktree, which has no installed dependencies of its own.
@@ -189,6 +199,16 @@ export interface LlmTotals {
   models: string[];
 }
 
+/** A dir the default targets left out, and why. */
+export interface Skipped {
+  /** Repo-relative POSIX dir. */
+  dir: string;
+  /** E.g. `VitePress site`. */
+  reason: string;
+  /** Doc files not checked. */
+  files: number;
+}
+
 export interface Report {
   /** JSON schema version of this report shape. */
   version: 1;
@@ -199,6 +219,8 @@ export interface Report {
   comparison?: Comparison;
   /** Present when the run used `--llm`. */
   llm?: LlmTotals;
+  /** Dirs the default targets left unchecked; present when there are any. */
+  skipped?: Skipped[];
   summary: {
     files: number;
     claims: number;

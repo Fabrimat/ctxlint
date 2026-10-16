@@ -148,7 +148,7 @@ All options and their defaults:
 
 <!-- ctxtruth-ignore -->
 
-Default `targets`: any `AGENTS.md` and `CLAUDE.md` (at any depth), Cursor rules (`.md` and `.mdc` files under the Cursor rules directory), the Copilot instructions file under the GitHub directory, the root README and everything in `docs/`.
+Default `targets`: any `AGENTS.md` and `CLAUDE.md` (at any depth), Cursor rules (`.md` and `.mdc` files under the Cursor rules directory), the Copilot instructions file under the GitHub directory, the root README and everything in `docs/`. When `targets` is not set, the pages of a documentation site (a dir with a VitePress, VuePress, Docusaurus, MkDocs, mdBook, Starlight or Jekyll marker, or a TanStack-style `docs/config.json`) are skipped, since they describe the users' projects rather than the repository; its agent files are still checked, and the report lists every skipped dir. Set `targets` to check a site.
 
 Default `rules`: `paths` and `scripts` are `error`; `commands`, `symbols` and `versions` are `warning`; `snippets` is `error`.
 

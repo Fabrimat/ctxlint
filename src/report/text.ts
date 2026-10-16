@@ -1,7 +1,7 @@
 import { styleText } from 'node:util';
 import type { FileReport, Finding, Report } from '../types.js';
 import { driftText, fixText } from './agent.js';
-import { isReported, isSemantic, verified } from './build.js';
+import { isReported, isSemantic, skippedLine, verified } from './build.js';
 import { llmLine } from './llm.js';
 
 type Style = Parameters<typeof styleText>[0];
@@ -126,6 +126,7 @@ export function formatText(report: Report, opts: { color: boolean; verbose: bool
   }
   out.push(formatSummary(report.summary, paint));
 
+  for (const s of report.skipped ?? []) out.push(paint(skippedLine(s), 'dim'));
   if (report.llm) out.push(llmLine(report.llm));
   return `${out.join('\n')}\n`;
 }

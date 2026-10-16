@@ -105,6 +105,18 @@ export const reportSchema = z
       })
       .optional()
       .describe('Present when the run used `--llm`.'),
+    skipped: z
+      .array(
+        z.strictObject({
+          dir: z.string().describe('Repo-relative POSIX dir.'),
+          reason: z.string().describe('E.g. `VitePress site`.'),
+          files: z.number().int().describe('Doc files not checked.'),
+        }),
+      )
+      .optional()
+      .describe(
+        'Dirs the default targets left unchecked (documentation sites); present when any were.',
+      ),
     summary: z.strictObject({
       files: z.number().int(),
       claims: z.number().int(),

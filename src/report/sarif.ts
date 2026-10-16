@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { fingerprint, type BuiltinCheckId, type CheckId, type Report } from '../types.js';
-import { reportedResults } from './build.js';
+import { reportedResults, skippedLine } from './build.js';
 import type { FormatOptions } from './index.js';
 
 const HELP_URI = 'https://github.com/Fabrimat/ctxtruth#what-it-checks';
@@ -46,6 +46,17 @@ export function formatSarif(report: Report, opts: FormatOptions): string {
           },
         },
         ...(report.llm && { properties: { llm: report.llm } }),
+        ...(report.skipped && {
+          invocations: [
+            {
+              executionSuccessful: true,
+              toolExecutionNotifications: report.skipped.map((s) => ({
+                level: 'note',
+                message: { text: skippedLine(s) },
+              })),
+            },
+          ],
+        }),
         results: results.flatMap((r) => {
           const f = r.finding;
           if (!f) return [];

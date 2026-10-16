@@ -1,20 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { configSchema, defaultConfig, defineConfig } from '../../src/config/index.js';
+import {
+  configSchema,
+  DEFAULT_TARGETS,
+  defaultConfig,
+  defineConfig,
+} from '../../src/config/index.js';
 
 describe('configSchema', () => {
   it('applies defaults to an empty object', () => {
     expect(configSchema.parse({})).toEqual({
-      targets: [
-        'AGENTS.md',
-        '**/AGENTS.md',
-        'CLAUDE.md',
-        '**/CLAUDE.md',
-        '.cursor/rules/**/*.md',
-        '.cursor/rules/**/*.mdc',
-        '.github/copilot-instructions.md',
-        'README.md',
-        'docs/**/*.md',
-      ],
       ignore: [],
       rules: {
         paths: 'error',
@@ -43,6 +37,21 @@ describe('configSchema', () => {
       },
     });
     expect(defaultConfig).toEqual(configSchema.parse({}));
+  });
+
+  it('leaves targets unset, so the defaults apply and skip documentation sites', () => {
+    expect(defaultConfig.targets).toBeUndefined();
+    expect(DEFAULT_TARGETS).toEqual([
+      'AGENTS.md',
+      '**/AGENTS.md',
+      'CLAUDE.md',
+      '**/CLAUDE.md',
+      '.cursor/rules/**/*.md',
+      '.cursor/rules/**/*.mdc',
+      '.github/copilot-instructions.md',
+      'README.md',
+      'docs/**/*.md',
+    ]);
   });
 
   it('merges partial rule overrides with defaults', () => {

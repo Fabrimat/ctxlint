@@ -445,6 +445,34 @@
         "models"
       ]
     },
+    "skipped": {
+      "description": "Dirs the default targets left unchecked (documentation sites); present when any were.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "Repo-relative POSIX dir."
+          },
+          "reason": {
+            "type": "string",
+            "description": "E.g. `VitePress site`."
+          },
+          "files": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Doc files not checked."
+          }
+        },
+        "required": [
+          "dir",
+          "reason",
+          "files"
+        ]
+      }
+    },
     "summary": {
       "type": "object",
       "properties": {

@@ -1,11 +1,18 @@
 import { buildFileIndex } from '../../src/index/files.js';
-import type { CheckContext, Claim, PackageInfo, RepoIndex, Severity } from '../../src/types.js';
+import type {
+  CheckContext,
+  Claim,
+  PackageInfo,
+  RepoIndex,
+  Severity,
+  Site,
+} from '../../src/types.js';
 
 type PackageInit = Partial<PackageInfo> & { dir: string };
 
 /** In-memory RepoIndex: the first package with dir '' (or an empty one) becomes the root. */
 export function makeIndex(
-  init: { files?: string[]; packages?: PackageInit[]; root?: string } = {},
+  init: { files?: string[]; packages?: PackageInit[]; root?: string; sites?: Site[] } = {},
 ): RepoIndex {
   const full = (p: PackageInit): PackageInfo => ({ scripts: {}, deps: {}, bins: [], ...p });
   const list = (init.packages ?? []).map(full);
@@ -15,6 +22,7 @@ export function makeIndex(
     root: init.root ?? '/nonexistent-repo',
     files: buildFileIndex(init.files ?? []),
     packages: { root, all },
+    sites: init.sites ?? [],
   };
 }
 

@@ -2,8 +2,8 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { checks as builtins } from './checks/index.js';
-import { loadConfig, type Config } from './config/index.js';
-import { buildRepoIndex, matchesAny } from './index/index.js';
+import { AGENT_TARGETS, DEFAULT_TARGETS, loadConfig, type Config } from './config/index.js';
+import { buildRepoIndex, matchesAny, siteOf } from './index/index.js';
 import { parseMarkdown, type ParseOptions } from './parse/index.js';
 import type { IgnoreRegion } from './parse/markers.js';
 import { changedOnly, classify, ENVIRONMENT_CHECKS, renamed } from './compare.js';
@@ -19,6 +19,7 @@ import type {
   LlmTotals,
   RepoIndex,
   Report,
+  Skipped,
 } from './types.js';
 
 export interface LlmOptions {
@@ -130,6 +131,7 @@ function toPrefix(root: string, cwd: string, arg: string): string {
 interface RunOutput {
   results: CheckResult[];
   docFiles: string[];
+  skipped: Skipped[];
 }
 
 /** Target docs in the index and the claims parsed from them. */
@@ -137,16 +139,31 @@ export async function collectClaims(
   index: RepoIndex,
   { config, parse }: Loaded,
   inScope: (doc: string) => boolean = () => true,
-): Promise<{ claims: Claim[]; docFiles: string[] }> {
-  const docFiles = index.files.files
-    .filter((f) => matchesAny(f, config.targets) && !matchesAny(f, config.ignore) && inScope(f))
+): Promise<{ claims: Claim[]; docFiles: string[]; skipped: Skipped[] }> {
+  const matched = index.files.files
+    .filter(
+      (f) =>
+        matchesAny(f, config.targets ?? DEFAULT_TARGETS) &&
+        !matchesAny(f, config.ignore) &&
+        inScope(f),
+    )
     .sort();
+  // Default targets only: the pages of a documentation site describe the users' projects.
+  const skipped = new Map<string, Skipped>();
+  const docFiles = matched.filter((f) => {
+    const site = config.targets === undefined ? siteOf(f, index.sites) : undefined;
+    if (site === undefined || matchesAny(f, AGENT_TARGETS)) return true;
+    const s = skipped.get(site.dir) ?? { dir: site.dir, reason: `${site.kind} site`, files: 0 };
+    s.files++;
+    skipped.set(site.dir, s);
+    return false;
+  });
   const claims: Claim[] = [];
   for (const file of docFiles) {
     const text = await readFile(join(index.root, file), 'utf8');
     claims.push(...parseMarkdown(text, file, parse));
   }
-  return { claims, docFiles };
+  return { claims, docFiles, skipped: [...skipped.values()] };
 }
 
 /** Runs every enabled check on `claims`, which may come from another commit than `index`. */
@@ -180,8 +197,8 @@ async function runOnce(
   if (depsRoot !== undefined && index.files.files.length === 0) {
     throw new Error(`the base checkout at ${root} lists no files`);
   }
-  const { claims, docFiles } = await collectClaims(index, loaded, inScope);
-  return { results: await evaluate(claims, index, loaded), docFiles };
+  const { claims, docFiles, skipped } = await collectClaims(index, loaded, inScope);
+  return { results: await evaluate(claims, index, loaded), docFiles, skipped };
 }
 
 export interface CheckOutput {
@@ -224,7 +241,8 @@ export async function checkLoaded(opts: CheckOptions, loaded: Loaded): Promise<C
   const base = ref === undefined ? undefined : await resolveBase(root, ref);
   const diff = base === undefined ? undefined : await changedFiles(root, base.sha);
 
-  let { results, docFiles } = await runOnce(root, loaded, inScope);
+  const head = await runOnce(root, loaded, inScope);
+  let { results, docFiles } = head;
   const all = { results, docFiles };
   let comparison: Comparison | undefined;
 
@@ -281,6 +299,7 @@ export async function checkLoaded(opts: CheckOptions, loaded: Loaded): Promise<C
   });
   if (comparison !== undefined) report.comparison = comparison;
   if (llm !== undefined) report.llm = llm;
+  if (head.skipped.length > 0) report.skipped = head.skipped;
   const descriptions = Object.fromEntries(
     loaded.checks.flatMap((c) => (c.description === undefined ? [] : [[c.id, c.description]])),
   );

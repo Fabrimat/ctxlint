@@ -1,4 +1,8 @@
-import type { CheckResult, FileReport, Finding, Report } from '../types.js';
+import type { CheckResult, FileReport, Finding, Report, Skipped } from '../types.js';
+
+/** `skipped docs/ (VitePress site, 412 files); add it to `targets` to check it` */
+export const skippedLine = (s: Skipped): string =>
+  `skipped ${s.dir}/ (${s.reason}, ${s.files} ${s.files === 1 ? 'file' : 'files'}); add it to \`targets\` to check it`;
 
 const ratio = (pass: number, fail: number): number | null =>
   pass + fail === 0 ? null : pass / (pass + fail);

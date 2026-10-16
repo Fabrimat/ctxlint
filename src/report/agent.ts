@@ -1,5 +1,5 @@
 import type { CheckResult, Finding, Report } from '../types.js';
-import { isSemantic, reportedResults } from './build.js';
+import { isSemantic, reportedResults, skippedLine } from './build.js';
 import { llmLine } from './llm.js';
 import type { FormatOptions } from './index.js';
 
@@ -98,6 +98,7 @@ export function formatAgent(report: Report, opts: FormatOptions): string {
   if (semantic.length > 0) {
     out.push('For the possible semantic drifts: confirm against the code, then fix.');
   }
+  out.push(...(report.skipped ?? []).map(skippedLine));
   if (report.llm) out.push(llmLine(report.llm));
   return `${out.join('\n')}\n`;
 }

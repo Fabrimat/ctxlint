@@ -51,20 +51,23 @@ const llmSchema = z.strictObject({
   pricing: z.record(z.string(), price).default({}),
 });
 
+/** Agent instruction files: checked wherever they live, documentation sites included. */
+export const AGENT_TARGETS: readonly string[] = [
+  'AGENTS.md',
+  '**/AGENTS.md',
+  'CLAUDE.md',
+  '**/CLAUDE.md',
+  '.cursor/rules/**/*.md',
+  '.cursor/rules/**/*.mdc',
+  '.github/copilot-instructions.md',
+];
+
+/** Used when `targets` is unset, which also leaves documentation sites out. */
+export const DEFAULT_TARGETS: readonly string[] = [...AGENT_TARGETS, 'README.md', 'docs/**/*.md'];
+
 export const configSchema = z.strictObject({
-  targets: z
-    .array(z.string())
-    .default([
-      'AGENTS.md',
-      '**/AGENTS.md',
-      'CLAUDE.md',
-      '**/CLAUDE.md',
-      '.cursor/rules/**/*.md',
-      '.cursor/rules/**/*.mdc',
-      '.github/copilot-instructions.md',
-      'README.md',
-      'docs/**/*.md',
-    ]),
+  /** Unset: `DEFAULT_TARGETS`, without the pages of documentation sites. */
+  targets: z.array(z.string()).optional(),
   ignore: z.array(z.string()).default([]),
   rules: z
     .object({
