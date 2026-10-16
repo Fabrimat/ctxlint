@@ -258,6 +258,16 @@ console.log(formatReport(report, 'text', { color: false, verbose: false }));
 - **Read-only.** It never edits your files; suggestions are printed, not applied.
 - **Honest numbers.** Every run reports how many claims were verified, failed or unknown, and a freshness score per file.
 
+## Evals
+
+The semantic check is measured by an adversarial set of cases (`evals/`, see [evals/README.md](evals/README.md)). Precision and the false-positive rate on adversarial cases matter most.
+
+| model | precision | recall | unsure | FPR (adv) | flip | $/check | p50 | n   |
+| ----- | --------- | ------ | ------ | --------- | ---- | ------- | --- | --- |
+|       |           |        |        |           |      |         |     |     |
+
+Not run yet: the paid run needs approval.
+
 ## Roadmap
 
 - **M1 (done):** paths, scripts and commands checks, text and JSON reports, config.
