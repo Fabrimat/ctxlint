@@ -16,7 +16,7 @@ pnpm test
 pnpm run typecheck
 npm run buidl
 pnpm dev
-tsx scripts/seed.ts
+pnpm exec tsx scripts/seed.ts
 git status
 ```
 

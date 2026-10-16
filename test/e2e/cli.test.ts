@@ -34,7 +34,7 @@ const DRIFT_TEXT = `AGENTS.md  freshness 23% (3/13)
   17:9   error    Script \`buidl\` is not defined in \`package.json\` (did you mean \`build\`?)                       scripts
                   suggestion: build
   18:6   warning  Script \`dev\` is not defined in \`package.json\` (it is defined in \`packages/web/package.json\`)  scripts
-  19:1   warning  Command \`tsx\` is not installed as a dependency                                                commands
+  19:11  warning  Command \`tsx\` is not installed as a dependency                                                commands
   31:31  warning  Symbol \`formatTimeStamp\` is not defined in the codebase (did you mean \`formatTimestamp\`?)     symbols
                   suggestion: formatTimestamp
   32:9   warning  \`Config\` has no member \`reload\`                                                               symbols
@@ -120,7 +120,7 @@ describe('ctxtruth check', () => {
     it('warning also fails on warnings', async () => {
       const repo = makeTmpRepo({
         'package.json': '{"scripts":{"build":"x"}}',
-        'AGENTS.md': '```sh\ntsx run.ts\n```\n',
+        'AGENTS.md': '```sh\npnpm exec tsx run.ts\n```\n',
       });
       try {
         expect((await run(['check', '--root', repo.dir])).code).toBe(0);

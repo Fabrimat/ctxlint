@@ -38,6 +38,10 @@ export const commandsCheck: Check = {
       if (ctx.index.depsRoot !== undefined) {
         return unknown(claim, 'commands', 'no installed binaries at a past commit');
       }
+      // Only `pnpm exec` needs a local install: a bare binary may be on PATH, and npx downloads.
+      if (claim.meta?.via !== 'pnpm-exec') {
+        return unknown(claim, 'commands', 'may be a global tool');
+      }
       return fail(
         claim,
         'commands',

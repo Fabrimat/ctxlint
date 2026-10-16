@@ -57,7 +57,7 @@ describe('check() on the drift fixture', () => {
     {
       file: 'AGENTS.md',
       line: 19,
-      col: 1,
+      col: 11,
       checkId: 'commands',
       severity: 'warning',
       message: 'Command `tsx` is not installed as a dependency',

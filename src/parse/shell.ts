@@ -244,7 +244,12 @@ function npx(args: Tok[]): Extracted[] {
 }
 
 const ENV_ASSIGNMENT = /^[A-Za-z_]\w*=/;
-const BINARY_NAME = /^[A-Za-z0-9_][\w.+-]*$/;
+/**
+ * Binary names start lowercase: `Tests  3 passed`, `Duration 1.2s` or `27` are output lines in
+ * an unprompted fence, and `app.test.ts` is a listed file. ponytail: drops the rare `R`/`MSBuild`.
+ */
+const BINARY_NAME = /^[a-z_][\w.+-]*$/;
+const FILE_NAME = /\.(?:[cm]?[jt]sx?|json|md|ya?ml|txt|log)$/;
 const WRAPPERS = new Set(['sudo', 'then', 'do', 'else', 'time']);
 const NOT_COMMANDS = new Set(
   (
@@ -323,7 +328,9 @@ function classify(raw: Tok[], line: string, adopted: Adopted): Extracted[] {
     const parts = name.startsWith('/') ? null : inlinePath(name);
     return parts ? [{ kind: 'path', ...parts, index: first.at }] : [];
   }
-  return BINARY_NAME.test(name) ? [{ kind: 'command', value: name, index: first.at }] : [];
+  return BINARY_NAME.test(name) && !FILE_NAME.test(name)
+    ? [{ kind: 'command', value: name, index: first.at }]
+    : [];
 }
 
 const NONE: Adopted = new Map();

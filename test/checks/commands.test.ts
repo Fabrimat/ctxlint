@@ -62,8 +62,18 @@ describe('commands check', () => {
     });
   });
 
-  it('fails as a warning otherwise', async () => {
-    const c = claim('turbo');
+  it('is unknown for a missing bare or npx binary: it may be a global tool', async () => {
+    for (const via of [undefined, 'npx']) {
+      const c = makeClaim({ kind: 'command', value: 'nub', ...(via && { meta: { via } }) });
+      expect((await commandsCheck.run([c], ctx))[0]).toMatchObject({
+        status: 'unknown',
+        reason: 'may be a global tool',
+      });
+    }
+  });
+
+  it('fails as a warning for a missing `pnpm exec` binary', async () => {
+    const c = makeClaim({ kind: 'command', value: 'turbo', meta: { via: 'pnpm-exec' } });
     const strict = makeCtx(ctx.index, 'error');
     expect(await commandsCheck.run([c], strict)).toEqual([
       {

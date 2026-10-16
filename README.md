@@ -86,7 +86,7 @@ The exit code is 1 because there are errors; see [exit codes](#exit-codes).
 | ---------- | ------ | ----------------------------------------------------------------------------------------- |
 | `paths`    | M1     | Files and directories mentioned in inline code and links exist. Suggests renames/moves.   |
 | `scripts`  | M1     | Script names used with `npm`, `pnpm`, `yarn` and `bun` exist in the right `package.json`. |
-| `commands` | M1     | Binaries used in shell fences are installed dependencies (system tools are skipped).      |
+| `commands` | M1     | Binaries run with `pnpm exec` are installed (a missing bare binary may be a global tool). |
 | `symbols`  | M2     | Functions, classes and members named in inline code exist. Suggests renamed symbols.      |
 | `snippets` | M2     | `ts`/`tsx` code blocks still type-check against the code they import.                     |
 | `versions` | M2     | `pkg@version` mentions match the installed version, the lockfile or `package.json`.       |

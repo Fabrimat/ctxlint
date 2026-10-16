@@ -139,6 +139,11 @@ describe('other commands', () => {
     ['$EDITOR file', []],
     ['/usr/bin/env x', []],
     ['git status # trailing comment', [command('git')]],
+    ['Tests  3 passed (3)', []],
+    ['Duration  1.20s', []],
+    ['27 tests', []],
+    ['my-test.test.ts  12ms', []],
+    ['xvfb-run node a.js', [command('xvfb-run')]],
   ])('%s', (line, expected) => {
     expect(fromLine(line)).toEqual(expected);
   });
