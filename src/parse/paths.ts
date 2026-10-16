@@ -52,6 +52,8 @@ export function inlinePath(raw: string): PathParts | null {
   if (!s.includes('/') && !BARE_FILE.test(s)) return null;
   const segments = s.replace(/^\//, '').replace(/\/$/, '').split('/');
   if (segments.some((g) => !SEGMENT.test(g) || /^\d+$/.test(g))) return null;
+  // `./foo.ts`, `bar/baz.js`: metasyntactic names.
+  if (segments.some((g) => /^(?:foo|bar|baz|qux)(?:\.|$)/i.test(g))) return null;
   // `e.g./i.e.`-style abbreviations: a non-final segment ending in a dot.
   if (segments.slice(0, -1).some((g) => g.endsWith('.') && g !== '..' && g !== '.')) return null;
   const parts = finish(s);

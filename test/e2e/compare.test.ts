@@ -80,7 +80,7 @@ describe('--new-only', () => {
 
   it('counts duplicate claims', async () => {
     const twice = '# A\n\n`src/x.ts`\n\n`src/x.ts`\n';
-    const r = repo({ 'AGENTS.md': twice });
+    const r = repo({ 'AGENTS.md': twice, 'src/index.ts': '' });
     r.write('AGENTS.md', `${twice}\n\`src/x.ts\`\n`);
     const { report } = await newOnly(r.dir);
     expect(reported(report)).toEqual(['AGENTS.md:7 docs']);
@@ -147,6 +147,7 @@ describe('--new-only edge cases', () => {
   it('treats a --root added since the base as empty there', async () => {
     const r = repo({ 'README.md': '# Root\n' });
     r.write('pkg/AGENTS.md', '# Pkg\n\n`src/missing.ts`\n');
+    r.write('pkg/src/index.ts', '');
     r.commit();
     const { report } = await check({ root: join(r.dir, 'pkg'), base: 'base', newOnly: true });
     expect(reported(report)).toEqual(['AGENTS.md:3 docs']);
@@ -177,7 +178,7 @@ describe('--changed-only', () => {
 
 describe('CLI comparison', () => {
   it('exits 1 only when findings were introduced', async () => {
-    const r = repo({ 'AGENTS.md': DOC, 'src/a.ts': '' });
+    const r = repo({ 'AGENTS.md': DOC, 'src/a.ts': '', 'src/c.ts': '' });
     expect((await cli(r.dir, ['--new-only', '--base', 'base'])).code).toBe(0);
     expect((await cli(r.dir, [])).code).toBe(1);
     rmSync(join(r.dir, 'src/a.ts'));

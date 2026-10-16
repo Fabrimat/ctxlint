@@ -138,7 +138,8 @@ describe('ctxtruth check', () => {
       const repo = makeTmpRepo({
         'ctxtruth.config.json': '{"failOn":"none"}',
         'package.json': '{}',
-        'README.md': 'See `missing/file.ts`.\n',
+        'README.md': 'See `src/missing.ts`.\n',
+        'src/index.ts': '',
       });
       try {
         expect((await run(['check', '--root', repo.dir])).code).toBe(0);

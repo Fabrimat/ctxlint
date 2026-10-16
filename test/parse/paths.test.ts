@@ -61,6 +61,8 @@ describe('inline code paths: rejected', () => {
     ['declaration extension', '.d.ts'],
     ['module extension', '.mjs'],
     ['test extension', '.test.ts'],
+    ['metasyntactic file', './foo.ts'],
+    ['metasyntactic dir', 'src/bar/x.ts'],
   ])('%s', (_name, code) => {
     expect(fromInline(code)).toEqual([]);
   });

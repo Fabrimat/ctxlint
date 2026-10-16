@@ -36,3 +36,24 @@ export function closest(
   }
   return best;
 }
+
+/**
+ * A typo-sized rename of `a` into `b`: both 6+ chars, and one edit, or two that change the length
+ * and sit together (`ModelToTable` -> `ModelTable`). Two substitutions make another word
+ * (`TaskResult` -> `WalkResult`, `EncodeContext` -> `DecodeContext`).
+ */
+export function isRename(a: string, b: string): boolean {
+  if (a === b || a.length < 6 || b.length < 6) return false;
+  const d = distance(a, b);
+  if (d === 1) return true;
+  if (d !== 2 || a.length === b.length) return false;
+  let pre = 0;
+  while (pre < Math.min(a.length, b.length) && a[pre] === b[pre]) pre++;
+  let suf = 0;
+  while (
+    suf < Math.min(a.length, b.length) - pre &&
+    a[a.length - 1 - suf] === b[b.length - 1 - suf]
+  )
+    suf++;
+  return pre + suf >= Math.max(a.length, b.length) - 2;
+}

@@ -194,6 +194,7 @@ describe('check() on a repo with a documentation site', () => {
   const files = {
     'package.json': '{"name":"site-repo"}',
     'README.md': 'See `src/gone.ts`.\n',
+    'src/index.ts': '',
     'docs/.vitepress/config.ts': 'export default {};\n',
     'docs/guide.md': 'Create `./examples/simple` first, then open `src/missing.ts`.\n',
     'docs/api.md': 'See `src/missing.ts`.\n',

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { posix } from 'node:path';
-import { closest } from '../util/distance.js';
+import { closest, isRename } from '../util/distance.js';
 import type { Check, CheckContext, CheckResult, Claim } from '../types.js';
 import { docDir, fail, pass, unknown } from './result.js';
 import { clean } from '../git/diff.js';
@@ -52,14 +52,35 @@ function gitIgnored(root: string, paths: string[]): Promise<Set<string>> {
 }
 
 /**
- * Weak claims (`foo/bar`: no extension, trailing slash or `./`) are often not paths at all
- * (`react-dom/client`, `origin/main`, `text/html`). Only verify them when their first
- * segment is a real directory, next to the doc or at the repo root.
+ * Whether the first directory the claim names (after any `./` and `../`) exists next to the doc
+ * or at the repo root. Weak claims (`react-dom/client`, `origin/main`) and paths in a guide for
+ * the users' projects (`app/layout.tsx`) are not anchored.
  */
 function anchoredInRepo(claim: Claim, ctx: CheckContext): boolean {
-  const [first = ''] = claim.value.replace(/^\/+/, '').split('/');
+  const parts = posix.normalize(claim.value.replace(/^\/+/, '')).split('/');
+  const ups = parts.filter((p) => p === '..').length;
+  const [first] = parts.filter((p) => p !== '..' && p !== '.');
+  if (first === undefined) return false;
   const bases = claim.meta?.anchor === 'root' ? [''] : [docDir(claim.file), ''];
-  return bases.some((base) => ctx.index.files.hasDir(posix.join(base, first)));
+  return bases.some((base) => {
+    const start = posix.normalize(posix.join(base, ...Array<string>(ups).fill('..')));
+    if (start === '..' || start.startsWith('../')) return false;
+    return ctx.index.files.hasDir(posix.join(start === '.' ? '' : start, first));
+  });
+}
+
+/**
+ * The one file next to the doc or at the root whose name is a typo-sized rename of `name`
+ * (`.oxlintrc.json` -> `.oxlintrc.jsonc`); never a suffix of it (`.server.tsx` -> `server.tsx`).
+ */
+function renamedFile(name: string, claim: Claim, ctx: CheckContext): string | undefined {
+  const dirs = new Set([docDir(claim.file), '']);
+  const near = ctx.index.files.files.filter((f) => {
+    const base = posix.basename(f);
+    if (!dirs.has(docDir(f)) || base.endsWith(name) || name.endsWith(base)) return false;
+    return isRename(name, base);
+  });
+  return near.length === 1 ? near[0] : undefined;
 }
 
 function suggest(
@@ -145,6 +166,23 @@ export const pathsCheck: Check = {
       if (cands.some((p) => ignored.has(p))) return unknown(claim, 'paths', 'gitignored', [target]);
       if (claim.meta?.generated === 'true') {
         return unknown(claim, 'paths', 'described as generated', [target]);
+      }
+      // A bare name (`my_module.ts`, `src/`, `.server.tsx`) is the vaguest claim: a naming
+      // convention, or a dir of every package. It fails only as a rename of one real file.
+      if (!claim.value.replace(/^\.\//, '').includes('/')) {
+        const to = claim.meta?.dir === 'true' ? undefined : renamedFile(claim.value, claim, ctx);
+        if (to === undefined) return unknown(claim, 'paths', 'bare name', [target]);
+        return fail(
+          claim,
+          'paths',
+          ctx.severity,
+          `Path \`${claim.value}\` does not exist (did you mean \`${to}\`?)`,
+          [target],
+          to,
+        );
+      }
+      if (!anchoredInRepo(claim, ctx)) {
+        return unknown(claim, 'paths', 'not anchored in the repository', [target]);
       }
       const s = claim.meta?.dir === 'true' ? undefined : suggest(target, ctx);
       return fail(

@@ -71,7 +71,7 @@ describe('paths check', () => {
   });
 
   it('suggests the single moved file by basename', async () => {
-    const c = claim('lib/helpers.ts');
+    const c = claim('src/lib/helpers.ts');
     expect(await pathsCheck.run([c], ctx)).toEqual([
       {
         claim: c,
@@ -79,10 +79,10 @@ describe('paths check', () => {
         status: 'fail',
         finding: finding(
           c,
-          'Path `lib/helpers.ts` does not exist (moved to `src/util/helpers.ts`?)',
+          'Path `src/lib/helpers.ts` does not exist (moved to `src/util/helpers.ts`?)',
           'src/util/helpers.ts',
         ),
-        resolvedFiles: ['lib/helpers.ts'],
+        resolvedFiles: ['src/lib/helpers.ts'],
       },
     ]);
   });
@@ -106,10 +106,10 @@ describe('paths check', () => {
 
   it('does not suggest an ambiguous basename or a distant path, and uses ctx severity', async () => {
     const amb = makeCtx(makeIndex({ files: ['a/x.ts', 'b/x.ts'] }), 'warning');
-    const c = claim('zzzzzzzzzz/x.ts');
+    const c = claim('a/zzzzzzzzzz/x.ts');
     const [r] = await pathsCheck.run([c], amb);
     expect(r?.finding).toEqual({
-      ...finding(c, 'Path `zzzzzzzzzz/x.ts` does not exist'),
+      ...finding(c, 'Path `a/zzzzzzzzzz/x.ts` does not exist'),
       severity: 'warning',
     });
   });
@@ -127,14 +127,14 @@ describe('paths check: gitignored', () => {
       { git: true },
     );
     cleanups.push(repo.cleanup);
-    const c = makeCtx(makeIndex({ files: ['.gitignore', 'a.txt'], root: repo.dir }));
+    const c = makeCtx(makeIndex({ files: ['.gitignore', 'a.txt', 'src/a.ts'], root: repo.dir }));
     const ignoredClaims = [
       claim('dist/'),
       claim('dist/main.js'),
       claim('.env'),
       claim('coverage/lcov.info'),
     ];
-    const missing = claim('nope.txt');
+    const missing = claim('src/nope.txt');
     const results = await pathsCheck.run([...ignoredClaims, missing], c);
     expect(results.map((r) => [r.status, r.reason])).toEqual([
       ['unknown', 'gitignored'],
@@ -236,7 +236,9 @@ describe('paths check: site links and generated files', () => {
 
   it('still fails a missing file link with an extension, or extensionless inline code', async () => {
     expect((await run(link('docs/gone.md', 'README.md')))?.status).toBe('fail');
-    expect((await run(link('logo.svg', 'README.md', { anchor: 'root' })))?.status).toBe('fail');
+    expect((await run(link('docs/logo.svg', 'README.md', { anchor: 'root' })))?.status).toBe(
+      'fail',
+    );
     expect((await run(claim('docs/guide/gone/')))?.status).toBe('fail');
   });
 
@@ -245,5 +247,46 @@ describe('paths check: site links and generated files', () => {
     expect(await run(c)).toMatchObject({ status: 'unknown', reason: 'described as generated' });
     const there = claim('docs/.vitepress/config.ts', { meta: { generated: 'true' } });
     expect((await run(there))?.status).toBe('pass');
+  });
+});
+
+describe('paths check: bare names and anchoring', () => {
+  const index = makeIndex({
+    files: ['.oxlintrc.jsonc', 'src/index.ts', 'packages/a/src/exports/client/index.ts'],
+  });
+  const run = async (c: Claim) => (await pathsCheck.run([c], makeCtx(index)))[0];
+
+  it('is unknown for a missing bare name, a naming convention or a per-package dir', async () => {
+    for (const c of [
+      claim('my_module.ts'),
+      claim('./kebab-case.test.ts'),
+      claim('test', { meta: { dir: 'true' } }),
+      claim('runner', { meta: { dir: 'true' } }),
+    ]) {
+      expect(await run(c), c.value).toMatchObject({ status: 'unknown', reason: 'bare name' });
+    }
+  });
+
+  it('fails a bare name that is a typo-sized rename of one file next to it', async () => {
+    expect((await run(claim('.oxlintrc.json')))?.finding).toMatchObject({
+      message: 'Path `.oxlintrc.json` does not exist (did you mean `.oxlintrc.jsonc`?)',
+      suggestion: '.oxlintrc.jsonc',
+    });
+    // Not a suffix (a file-name convention), not a file deep in another package.
+    const deep = makeIndex({ files: ['server.tsx', 'packages/a/src/indexes.ts'] });
+    for (const v of ['.server.tsx', 'indexes.js']) {
+      expect((await pathsCheck.run([claim(v)], makeCtx(deep)))[0]?.status, v).toBe('unknown');
+    }
+  });
+
+  it('is unknown for a path whose first dir is neither next to the doc nor at the root', async () => {
+    for (const v of ['app/layout.tsx', 'exports/client/index.js', './styles/global.css']) {
+      expect(await run(claim(v)), v).toMatchObject({
+        status: 'unknown',
+        reason: 'not anchored in the repository',
+      });
+    }
+    expect((await run(claim('src/old/config.ts')))?.status).toBe('fail');
+    expect((await run(claim('../src/gone.ts', { file: 'docs/a.md' })))?.status).toBe('fail');
   });
 });
