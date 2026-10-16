@@ -17,6 +17,10 @@
     "type": "git",
     "url": "git+https://github.com/Fabrimat/ctxtruth.git"
   },
+  "homepage": "https://github.com/Fabrimat/ctxtruth#readme",
+  "bugs": {
+    "url": "https://github.com/Fabrimat/ctxtruth/issues"
+  },
   "type": "module",
   "bin": {
     "ctxtruth": "dist/cli.js"
@@ -29,11 +33,15 @@
     "./plugin": {
       "types": "./dist/plugin/types.d.ts",
       "default": "./dist/plugin/types.js"
-    }
+    },
+    "./package.json": "./package.json",
+    "./schema/*.json": "./schema/*.json"
   },
   "files": [
     "dist",
     "schema",
+    "CHANGELOG.md",
+    "!dist/**/*.map",
     "!dist/**/*.test.*"
   ],
   "engines": {
@@ -42,6 +50,7 @@
   "packageManager": "pnpm@10.34.5",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm build",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
@@ -73,5 +82,9 @@
   "optionalDependencies": {
     "@anthropic-ai/sdk": "0.131.0",
     "openai": "7.25.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
