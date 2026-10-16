@@ -43,7 +43,7 @@ Run it on every pull request, with a comment that reports only the drift the pul
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: Fabrimat/ctxtruth@main
+- uses: Fabrimat/ctxtruth@v0
 ```
 
 See the [GitHub Action guide](docs/github-action.md) for permissions, inputs and SARIF upload.
@@ -82,7 +82,7 @@ All 10 findings are real drift, 8 distinct problems. Three examples:
 - **langchainjs `AGENTS.md`** tells agents to run `pnpm --filter @langchain/core lint:dpdm`, a script `@langchain/core` does not define.
 - **react-router API docs** import `unstable_createCallServer` and `unstable_getRSCStream` from `react-router`; both are exported only from `react-router/dom`.
 
-Getting there took one honest iteration: on zod, vitest and TanStack Query the first version reported 7,555 findings, almost all false. They came from documentation sites describing users' projects, site routes, type parameters, output lines in shell blocks and the like. Each class became a rule with tests, and documentation sites and historical records are now skipped by default (and reported as skipped). The [full study](bench/study/README.md) lists every repository, commit and finding. No issue or pull request was opened on any of them.
+These numbers are in-sample: the precision rules were developed against these same 26 repositories, so they measure how well the defaults fit them, not a held-out set. On zod, vitest and TanStack Query the first version reported 7,555 findings, almost all false. They came from documentation sites describing users' projects, site routes, type parameters, output lines in shell blocks and the like. Each class became a rule with tests, and documentation sites and historical records are now skipped by default (and reported as skipped). The [full study](bench/study/README.md) lists every repository, commit and finding. No issue or pull request was opened on any of them.
 
 <!-- ctxtruth-enable -->
 
@@ -99,7 +99,7 @@ Getting there took one honest iteration: on zod, vitest and TanStack Query the f
 
 Plugins add checks for claims ctxtruth does not know about, such as your own CLI's commands or ids from a content index: see [docs/plugins.md](docs/plugins.md).
 
-Monorepos are understood: a script is looked up in the nearest package, workspace filters are resolved, and a script that exists only in another workspace is reported with its location.
+Monorepos are understood: a script is looked up in the nearest package, workspace filters are resolved, and a script that exists only in a sibling workspace is reported with its location. A script defined only in the root or in a subpackage is `unknown` when another package's doc names it, since it may be run from there.
 
 ## How claims are extracted
 

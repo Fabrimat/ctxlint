@@ -9,6 +9,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 First public release.
 
+### Changed
+
+- Documentation sites (VitePress, VuePress, Docusaurus, MkDocs, mdBook, Jekyll, Astro Starlight, Nuxt Content, Mintlify, TanStack-style and site packages) and historical records (ADRs, release notes, changelogs, blogs) are skipped by the default targets and listed in `report.skipped`; agent files inside them are still checked, and explicit `targets` check everything.
+- Precision rules from a study on 26 real repositories: extensionless site links resolve to `.md` pages or are `unknown`; file extensions, bare names, unanchored paths and paths described as generated are not reported; type parameters, bare camelCase names, constants and placeholders are not symbols, and renames must be confident; output lines in shell blocks are not commands, and a missing bare binary may be a global tool; scripts are followed through `cd`, and scripts defined only in the root or in a subpackage are `unknown` when named from another package; snippets shown as counterexamples, importing the workspace, or failing on declarations outside the repository are `unknown`; versions stated as bounds are `unknown`.
+
 ### Added
 
 - Markdown parser that extracts path, script and command claims from inline code, links, shell fences and (opt-in) prose, with `ctxtruth-ignore` and `ctxtruth-disable`/`ctxtruth-enable` markers.

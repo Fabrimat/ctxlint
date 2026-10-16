@@ -11,7 +11,7 @@ Clones were shallow, except zod, vitest and TanStack Query, which have full hist
 ## Totals
 
 - 26 repositories, 796 documents, 14,052 claims: 10,945 verified, 3,097 unknown.
-- 10 findings, all true positives (8 distinct problems), 0 false positives.
+- 10 findings, all true positives (8 distinct problems), 0 false positives. This is an in-sample result: the precision rules were developed against these same repositories, and no held-out set has been run yet.
 - 5,294 pages skipped by default: documentation sites (VitePress, Docusaurus, Nuxt Content, TanStack, Next.js, MDX) and historical records (ADRs, release notes), whose claims describe users' projects or past code. Agent files inside them are still checked.
 
 Before the precision pass that produced these defaults, the same tool reported 7,555 findings on zod, vitest and TanStack Query alone, almost all of them false. The classes fixed are listed in the [CHANGELOG](../../CHANGELOG.md).

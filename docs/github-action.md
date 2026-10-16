@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the base comparison needs the full history
-      - uses: Fabrimat/ctxtruth@main
+      - uses: Fabrimat/ctxtruth@v0
 ```
 
 On pull requests the action compares against `origin/<base branch>` and reports only the findings the pull request introduces.
@@ -89,7 +89,7 @@ Pass `--llm` through `args` and give the step the provider key:
 <!-- ctxtruth-ignore -->
 
 ```yaml
-- uses: Fabrimat/ctxtruth@main
+- uses: Fabrimat/ctxtruth@v0
   with:
     args: --llm --max-cost 0.50
   env:
