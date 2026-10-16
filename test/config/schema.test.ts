@@ -23,11 +23,24 @@ describe('configSchema', () => {
         symbols: 'warning',
         snippets: 'error',
         versions: 'warning',
+        semantic: 'warning',
       },
       plugins: [],
       ignoreRegions: [],
       prose: false,
       failOn: 'error',
+      llm: {
+        provider: 'anthropic',
+        models: {},
+        maxCost: 1,
+        scope: 'changed',
+        maxFiles: 6,
+        maxFileBytes: 100_000,
+        maxSectionBytes: 8_000,
+        timeoutMs: 60_000,
+        concurrency: 4,
+        pricing: {},
+      },
     });
     expect(defaultConfig).toEqual(configSchema.parse({}));
   });
@@ -41,6 +54,7 @@ describe('configSchema', () => {
       symbols: 'warning',
       snippets: 'error',
       versions: 'warning',
+      semantic: 'warning',
     });
   });
 
@@ -57,6 +71,35 @@ describe('configSchema', () => {
   it('defineConfig is the identity', () => {
     const c = { prose: true };
     expect(defineConfig(c)).toBe(c);
+  });
+});
+
+describe('llm config', () => {
+  it('rejects an apiKey: keys come from the environment', () => {
+    expect(configSchema.safeParse({ llm: { apiKey: 'sk-x' } }).success).toBe(false);
+  });
+
+  it('accepts unlimited and rejects an invalid maxCost', () => {
+    expect(configSchema.parse({ llm: { maxCost: 'unlimited' } }).llm.maxCost).toBe('unlimited');
+    expect(configSchema.parse({ llm: { maxCost: 0.25 } }).llm.maxCost).toBe(0.25);
+    for (const maxCost of [-1, 'lots', null]) {
+      expect(configSchema.safeParse({ llm: { maxCost } }).success).toBe(false);
+    }
+  });
+
+  it('validates provider, scope, models and pricing', () => {
+    expect(configSchema.safeParse({ llm: { provider: 'gemini' } }).success).toBe(false);
+    expect(configSchema.safeParse({ llm: { scope: 'some' } }).success).toBe(false);
+    expect(configSchema.safeParse({ llm: { models: { other: 'x' } } }).success).toBe(false);
+    const { llm } = configSchema.parse({
+      llm: {
+        provider: 'openai',
+        models: { fix: 'gpt-x' },
+        pricing: { 'gpt-x': { input: 1, output: 2 } },
+      },
+    });
+    expect(llm.pricing['gpt-x']).toEqual({ input: 1, output: 2 });
+    expect(configSchema.safeParse({ llm: { pricing: { m: { input: 1 } } } }).success).toBe(false);
   });
 });
 

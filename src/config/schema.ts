@@ -2,7 +2,15 @@ import { z } from 'zod';
 
 const level = z.enum(['error', 'warning', 'off']);
 
-const BUILTIN_RULES = ['paths', 'scripts', 'commands', 'symbols', 'snippets', 'versions'];
+const BUILTIN_RULES = [
+  'paths',
+  'scripts',
+  'commands',
+  'symbols',
+  'snippets',
+  'versions',
+  'semantic',
+];
 /** Plugin rule keys are namespaced: `<plugin>/<check>`. */
 const PLUGIN_RULE = /^[a-z0-9-]+\/[a-z0-9-]+$/;
 
@@ -17,6 +25,31 @@ const regexSource = z.string().refine(
   },
   { message: 'not a valid regular expression' },
 );
+
+const price = z.strictObject({
+  input: z.number().min(0),
+  output: z.number().min(0),
+  cacheRead: z.number().min(0).optional(),
+});
+
+/** Model-judged checks (`--llm`). Keys never live in the config: the SDKs read them from the environment. */
+const llmSchema = z.strictObject({
+  provider: z.enum(['anthropic', 'openai']).default('anthropic'),
+  /** Per task; the Anthropic defaults apply when unset, OpenAI has none. */
+  models: z
+    .strictObject({ classify: z.string().optional(), fix: z.string().optional() })
+    .prefault({}),
+  /** Spend ceiling in USD, or `unlimited`. */
+  maxCost: z.union([z.number().min(0), z.literal('unlimited')]).default(1),
+  scope: z.enum(['changed', 'all']).default('changed'),
+  maxFiles: z.number().int().min(1).default(6),
+  maxFileBytes: z.number().int().min(1).default(100_000),
+  maxSectionBytes: z.number().int().min(1).default(8_000),
+  timeoutMs: z.number().int().min(1).default(60_000),
+  concurrency: z.number().int().min(1).default(4),
+  /** USD per 1M tokens, by model id; merged over the built-in prices. */
+  pricing: z.record(z.string(), price).default({}),
+});
 
 export const configSchema = z.strictObject({
   targets: z
@@ -41,6 +74,7 @@ export const configSchema = z.strictObject({
       symbols: level.default('warning'),
       snippets: level.default('error'),
       versions: level.default('warning'),
+      semantic: level.default('warning'),
     })
     .catchall(level)
     .superRefine((rules, ctx) => {
@@ -65,10 +99,12 @@ export const configSchema = z.strictObject({
   /** Extract path claims from plain prose (noisy, so opt-in). */
   prose: z.boolean().default(false),
   failOn: z.enum(['error', 'warning', 'none']).default('error'),
+  llm: llmSchema.prefault({}),
 });
 
 export type UserConfig = z.input<typeof configSchema>;
 export type Config = z.output<typeof configSchema>;
+export type LlmConfig = Config['llm'];
 
 export const defaultConfig: Config = configSchema.parse({});
 
