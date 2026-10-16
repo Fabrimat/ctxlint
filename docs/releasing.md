@@ -6,10 +6,11 @@ The `release` workflow (`.github/workflows/release.yml`) publishes to npm with p
 
 1. **Rename the repository** from `ctxlint` to `ctxtruth` (Settings, General). GitHub redirects the old URL; the `repository`, `homepage` and `bugs` fields already point to `Fabrimat/ctxtruth`.
 2. **Make it public.** npm provenance and the Marketplace both need a public repository.
-3. **Give the workflow npm access**, with one of:
-   - **Automation token (default).** Create a granular or automation access token on npmjs.com with publish rights to `ctxtruth`, and save it as the repository secret `NPM_TOKEN`. The first publish of a new package needs a token, because a trusted publisher can only be configured on a package that exists.
-   - **Trusted publishing (OIDC).** After the first publish, add a trusted publisher on the package settings page (repository `Fabrimat/ctxtruth`, workflow `release.yml`), then delete `NPM_TOKEN`. The workflow already has `id-token: write`; npm CLI 11.5.1 or later is required, which Node 24 ships.
-4. Optionally protect the `v*` tags (Settings, Rules) so only maintainers can create them. The workflow moves the major tags (`v0`, `v1`), so allow it to update those.
+3. **Create the `release` environment** (Settings, Environments). The `publish` job runs in it, so add required reviewers if you want a manual approval, and store `NPM_TOKEN` as an environment secret there, not as a repository secret. The `verify` job runs tests with no secrets and read-only permissions.
+4. **Give the workflow npm access**, with one of:
+   - **Automation token (default).** Create a granular or automation access token on npmjs.com with publish rights to `ctxtruth`, and save it as the `NPM_TOKEN` secret of the `release` environment. The first publish of a new package needs a token, because a trusted publisher can only be configured on a package that exists.
+   - **Trusted publishing (OIDC).** After the first publish, add a trusted publisher on the package settings page (repository `Fabrimat/ctxtruth`, workflow `release.yml`), then delete `NPM_TOKEN`: if it is still set it takes precedence over OIDC. The workflow already has `id-token: write`; npm CLI 11.5.1 or later is required, which Node 24 ships.
+5. **Protect the `v*` tags** (Settings, Rules, tag ruleset). This is required: the Action and the release depend on them. Only maintainers may create tags, and the rule must let the workflow (the `github-actions` bot or the `release` environment) update `v0`, `v1` and so on.
 
 ## First release (0.1.0)
 
@@ -37,11 +38,13 @@ The Action's `action.yml` is at the repository root. Marketplace listing is a ma
 3. Primary category: Code quality. Secondary: Continuous integration.
 4. Save. The `name` in `action.yml` must be unique on the Marketplace; if `ctxtruth` is taken, use `ctxtruth docs drift`.
 
-Users then write `uses: Fabrimat/ctxtruth@v0`. The `version` input defaults to `latest`, so `@v0` runs the newest published CLI; pin `version: 0.1.0` for reproducible runs.
+Users then write `uses: Fabrimat/ctxtruth@v0`. The `version` input defaults to `^0`, so `@v0` runs the newest 0.x CLI; pin `version: 0.1.0` for reproducible runs.
 
 ## After a release
 
-- The workflow moves the major tag (`v0` for 0.x, `v1` for 1.x) to the release commit. Check `git ls-remote --tags origin`.
+- The workflow moves the major tag (`v0` for 0.x, `v1` for 1.x) to the release commit, except for prereleases (`0.2.0-rc.1`: published with the `next` npm tag, marked as a GitHub prerelease) and when a higher stable version of that major is already tagged. Check `git ls-remote --tags origin`.
+- When cutting a new major tag `vN`, set the `version` default in `action.yml` to `^N` in the same release, so `@vN` runs the matching CLI range.
+- The workflow can be re-run after a failure: it skips the npm publish and the GitHub release that already exist.
 - Smoke test the CLI: `npx ctxtruth@0.1.0 check` in a scratch repository.
 - Smoke test the Action: in a test repository add `uses: Fabrimat/ctxtruth@v0` to a pull request workflow (see [github-action.md](github-action.md)) and confirm the comment appears.
 - Add a new empty `## [Unreleased]` section if it is missing.
