@@ -26,6 +26,8 @@ export type LlmResponse<T> =
       reason: LlmFailure;
       detail: string;
       usage: LlmUsage | null;
+      /** False only when the request provably never reached the API; absent means it was sent. */
+      sent?: boolean;
       model: string;
       latencyMs: number;
     };
@@ -52,7 +54,15 @@ export function failing(
   return {
     name,
     complete: (req) =>
-      Promise.resolve({ ok: false, reason, detail, usage: null, model: req.model, latencyMs: 0 }),
+      Promise.resolve({
+        ok: false,
+        reason,
+        detail,
+        usage: null,
+        sent: false,
+        model: req.model,
+        latencyMs: 0,
+      }),
   };
 }
 

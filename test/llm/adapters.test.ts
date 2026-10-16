@@ -245,7 +245,7 @@ describe('OpenAiProvider', () => {
     });
     expect(
       await fail(new openaiSdk.AuthenticationError(401, undefined, 'no', new Headers())),
-    ).toMatchObject({ reason: 'no-key' });
+    ).toMatchObject({ reason: 'error', detail: 'OPENAI_API_KEY was rejected' });
     expect(
       await fail(new openaiSdk.RateLimitError(429, undefined, 'slow', new Headers())),
     ).toMatchObject({ reason: 'error' });

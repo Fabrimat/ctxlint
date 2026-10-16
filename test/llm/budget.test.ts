@@ -75,7 +75,7 @@ describe('Budget', () => {
   it('releases the reservation of a failed call', () => {
     const b = new Budget(0.02, DEFAULT_PRICING);
     const r = b.reserve('claude-sonnet-5-5', 1000, 1000);
-    b.settle(r as Reservation, null);
+    b.settle(r as Reservation, null, false);
     expect(b.totals().costUsd).toBe(0);
     expect(b.reserve('claude-sonnet-5-5', 1000, 1000)).not.toBeNull();
   });
@@ -178,5 +178,44 @@ describe('FakeProvider', () => {
       reason: 'error',
       detail: 'boom',
     });
+  });
+});
+
+describe('budget leak', () => {
+  const invalid = (sent?: boolean): LlmResponse<unknown> => ({
+    ok: false,
+    reason: sent === false ? 'no-key' : 'invalid',
+    detail: 'x',
+    usage: null,
+    ...(sent === false && { sent }),
+    model: 'claude-sonnet-5-5',
+    latencyMs: 1,
+  });
+
+  it('charges a sent call without usage at the worst case and flags the estimate', async () => {
+    const budget = new Budget(1, DEFAULT_PRICING);
+    await callWithBudget(budget, new FakeProvider(() => invalid()), req());
+    const t = budget.totals();
+    expect(t.costEstimated).toBe(true);
+    // 1001 estimated input tokens at $2/M plus 1000 output tokens at $10/M
+    expect(t.costUsd).toBeCloseTo((1001 * 2 + 1000 * 10) / 1e6);
+  });
+
+  it('releases a call that never reached the API', async () => {
+    const budget = new Budget(1, DEFAULT_PRICING);
+    await callWithBudget(budget, new FakeProvider(() => invalid(false)), req());
+    expect(budget.totals()).toMatchObject({ costUsd: 0, costEstimated: false });
+  });
+
+  it('never exceeds the budget under 20 concurrent invalid calls', async () => {
+    const max = 0.1;
+    const budget = new Budget(max, DEFAULT_PRICING);
+    const provider = new FakeProvider(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      return invalid();
+    });
+    await Promise.all(Array.from({ length: 20 }, () => callWithBudget(budget, provider, req())));
+    expect(budget.totals().costUsd).toBeLessThanOrEqual(max);
+    expect(provider.requests.length).toBeLessThan(20);
   });
 });

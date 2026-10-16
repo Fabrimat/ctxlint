@@ -12,6 +12,7 @@ const totals: LlmTotals = {
   outputTokens: 2_100,
   cacheReadTokens: 0,
   costUsd: 0.07,
+  costEstimated: false,
   latencyMs: 14_200,
   budgetUsd: 1,
   models: ['claude-haiku-5-5'],
@@ -75,5 +76,11 @@ describe('report.llm in every format', () => {
       proposedFix: { startLine: 1, endLine: 2, replacement: 'x' },
     });
     expect(reportSchema.safeParse(JSON.parse(formatReport(r, 'json', opts))).success).toBe(true);
+  });
+});
+
+describe('estimated cost', () => {
+  it('is marked with a tilde', () => {
+    expect(llmLine({ ...totals, costEstimated: true })).toContain('· ~$0.0700 ·');
   });
 });

@@ -181,6 +181,8 @@ export interface LlmTotals {
   cacheReadTokens: number;
   /** Null when a call used a model with no known price. */
   costUsd: number | null;
+  /** True when part of `costUsd` is a worst-case estimate (a sent call reported no usage). */
+  costEstimated: boolean;
   latencyMs: number;
   /** Null when unlimited. */
   budgetUsd: number | null;

@@ -66,7 +66,16 @@ export class OpenAiProvider implements LlmProvider {
       detail: string,
       usage: LlmUsage | null = null,
       model = req.model,
-    ): LlmResponse<T> => ({ ok: false, reason, detail, usage, model, latencyMs: latencyMs() });
+      sent = true,
+    ): LlmResponse<T> => ({
+      ok: false,
+      reason,
+      detail,
+      usage,
+      sent,
+      model,
+      latencyMs: latencyMs(),
+    });
     try {
       const params = openAiParams(req, this.textFormat(req.schema, 'ctxtruth'));
       const res = await this.client.responses.parse(params);
@@ -100,7 +109,7 @@ export class OpenAiProvider implements LlmProvider {
       const { sdk } = this;
       if (err instanceof sdk.APIConnectionTimeoutError) return fail('timeout', message);
       if (err instanceof sdk.AuthenticationError) {
-        return fail('no-key', 'OPENAI_API_KEY was rejected');
+        return fail('error', 'OPENAI_API_KEY was rejected', null, req.model, false);
       }
       if (err instanceof sdk.APIError) return fail('error', message);
       if (err instanceof ZodError || err instanceof SyntaxError) return fail('invalid', message);

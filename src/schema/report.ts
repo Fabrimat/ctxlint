@@ -94,6 +94,11 @@ export const reportSchema = z
         outputTokens: z.number().int(),
         cacheReadTokens: z.number().int(),
         costUsd: z.number().nullable().describe('Null when a model has no known price.'),
+        costEstimated: z
+          .boolean()
+          .describe(
+            'True when part of the cost is a worst-case estimate (a call reported no usage).',
+          ),
         latencyMs: z.number(),
         budgetUsd: z.number().nullable().describe('Null when unlimited.'),
         models: z.array(z.string()),

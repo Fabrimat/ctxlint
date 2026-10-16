@@ -4,7 +4,8 @@ const tokens = (n: number): string => (n < 1000 ? String(n) : `${(n / 1000).toFi
 
 /** `llm: 12 calls · 48.2k in / 2.1k out · $0.0700 · 14.2 s · budget $1.00 (3 skipped)` */
 export function llmLine(t: LlmTotals): string {
-  const cost = t.costUsd === null ? 'cost unknown' : `$${t.costUsd.toFixed(4)}`;
+  const cost =
+    t.costUsd === null ? 'cost unknown' : `${t.costEstimated ? '~' : ''}$${t.costUsd.toFixed(4)}`;
   const budget = t.budgetUsd === null ? 'no budget' : `budget $${t.budgetUsd.toFixed(2)}`;
   const skipped = t.skipped > 0 ? ` (${t.skipped} skipped)` : '';
   return [

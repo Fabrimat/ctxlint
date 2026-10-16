@@ -25,7 +25,7 @@ async function run(args: string[]) {
   return { code, out, err };
 }
 
-describe('check without --llm', { timeout: 30_000 }, () => {
+describe('check without --llm', () => {
   it('runs without importing an SDK', async () => {
     const { code, err } = await run(['check', '--root', clean]);
     expect(code).toBe(0);
@@ -33,7 +33,7 @@ describe('check without --llm', { timeout: 30_000 }, () => {
   });
 });
 
-describe('check LLM flags', { timeout: 30_000 }, () => {
+describe('check LLM flags', () => {
   it('validates --max-cost', async () => {
     for (const bad of ['abc', '-1', '']) {
       const { code, err } = await run(['check', '--root', clean, '--max-cost', bad]);

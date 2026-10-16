@@ -77,7 +77,15 @@ export class AnthropicProvider implements LlmProvider {
       detail: string,
       usage: LlmUsage | null = null,
       model = req.model,
-    ): LlmResponse<T> => ({ ok: false, reason, detail, usage, model, latencyMs: latencyMs() });
+    ): LlmResponse<T> => ({
+      ok: false,
+      reason,
+      detail,
+      usage,
+      sent: reason !== 'no-key',
+      model,
+      latencyMs: latencyMs(),
+    });
     try {
       const params = anthropicParams(req, this.outputFormat(req.schema));
       const api = params.betas === undefined ? this.client.messages : this.client.beta.messages;

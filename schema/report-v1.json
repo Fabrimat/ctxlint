@@ -410,6 +410,10 @@
             "null"
           ]
         },
+        "costEstimated": {
+          "type": "boolean",
+          "description": "True when part of the cost is a worst-case estimate (a call reported no usage)."
+        },
         "latencyMs": {
           "type": "number"
         },
@@ -435,6 +439,7 @@
         "outputTokens",
         "cacheReadTokens",
         "costUsd",
+        "costEstimated",
         "latencyMs",
         "budgetUsd",
         "models"

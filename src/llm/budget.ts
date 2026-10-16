@@ -7,6 +7,8 @@ export const estimateTokens = (text: string): number => Math.ceil(text.length / 
 
 export interface Reservation {
   model: string;
+  /** False when the model has no known price (unlimited budgets only). */
+  priced: boolean;
   /** Worst-case cost held against the budget; 0 when the price is unknown and the budget unlimited. */
   held: number;
 }
@@ -19,6 +21,7 @@ export class Budget {
   private spent = 0;
   private reserved = 0;
   private unpriced = false;
+  private estimated = false;
   private calls = 0;
   private failedCalls = 0;
   private skipped = 0;
@@ -49,13 +52,23 @@ export class Budget {
       return null;
     }
     this.reserved += worst ?? 0;
-    return { model, held: worst ?? 0 };
+    return { model, priced: worst !== null, held: worst ?? 0 };
   }
 
-  /** Replaces the reservation by the actual cost; a call with no usage releases it. */
-  settle(r: Reservation, usage: LlmUsage | null): void {
+  /**
+   * Replaces the reservation by the actual cost. A sent call with no usage (timeout, invalid
+   * output) may still have been billed, so it is charged at the reserved worst case; only a call
+   * that never reached the API (`sent` false) is released.
+   */
+  settle(r: Reservation, usage: LlmUsage | null, sent = true): void {
     this.reserved -= r.held;
-    if (usage === null) return;
+    if (usage === null) {
+      if (!sent) return;
+      this.estimated = true;
+      if (r.priced) this.spent += r.held;
+      else this.unpriced = true;
+      return;
+    }
     const cost = costUsd(this.pricing, r.model, usage);
     if (cost === null) this.unpriced = true;
     else this.spent += cost;
@@ -88,6 +101,7 @@ export class Budget {
       outputTokens: this.outputTokens,
       cacheReadTokens: this.cacheReadTokens,
       costUsd: this.unpriced ? null : this.spent,
+      costEstimated: this.estimated,
       latencyMs: this.latencyMs,
       budgetUsd: this.maxUsd,
       models: [...this.models].sort(),
@@ -112,12 +126,13 @@ export async function callWithBudget<T>(
       reason: 'budget',
       detail: 'the call would exceed the cost budget',
       usage: null,
+      sent: false,
       model: req.model,
       latencyMs: 0,
     };
   }
   const res = await provider.complete(req);
-  budget.settle(reservation, res.usage);
+  budget.settle(reservation, res.usage, res.ok || res.sent !== false);
   budget.record(res);
   return res;
 }
