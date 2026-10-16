@@ -12,6 +12,7 @@ const DESCRIPTIONS: Record<BuiltinCheckId, string> = {
   symbols: 'Documented code symbol does not exist',
   snippets: 'Documented TypeScript snippet does not type-check',
   versions: 'Documented package version differs from the installed dependency',
+  semantic: 'Documentation section contradicts the code it describes (judged by a model)',
 };
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -43,6 +44,7 @@ export function formatSarif(report: Report, opts: FormatOptions): string {
             })),
           },
         },
+        ...(report.llm && { properties: { llm: report.llm } }),
         results: results.flatMap((r) => {
           const f = r.finding;
           if (!f) return [];

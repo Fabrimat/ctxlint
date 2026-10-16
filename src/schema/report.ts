@@ -5,14 +5,14 @@ import type { Report } from '../types.js';
 const checkId = z
   .string()
   .describe(
-    'Built-in: paths, scripts, commands, symbols, snippets, versions. Plugin checks are namespaced `<plugin>/<check>`.',
+    'Built-in: paths, scripts, commands, symbols, snippets, versions, semantic. Plugin checks are namespaced `<plugin>/<check>`.',
   );
 
 export const claimSchema = z.strictObject({
   kind: z
     .string()
     .describe(
-      'Built-in: path, script, command, symbol, snippet, version, custom. More kinds may be added.',
+      'Built-in: path, script, command, symbol, snippet, version, section, custom. More kinds may be added.',
     ),
   value: z.string().describe('Normalised claim text.'),
   file: z.string().describe('Repo-relative POSIX path of the Markdown file.'),
@@ -35,6 +35,15 @@ export const findingSchema = z.strictObject({
     .enum(['docs', 'code'])
     .optional()
     .describe('Only when compared with a base ref: what made the claim false.'),
+  model: z.string().optional().describe('The model that judged the claim (model-judged findings).'),
+  proposedFix: z
+    .strictObject({
+      startLine: z.number().int().describe('1-based.'),
+      endLine: z.number().int().describe('1-based, inclusive.'),
+      replacement: z.string(),
+    })
+    .optional()
+    .describe('A proposed rewrite of those lines (`--fix`).'),
 });
 
 const resultSchema = z.strictObject({
@@ -76,6 +85,21 @@ export const reportSchema = z
       })
       .optional()
       .describe('Present when compared with a base ref.'),
+    llm: z
+      .strictObject({
+        calls: z.number().int(),
+        failedCalls: z.number().int(),
+        skipped: z.number().int().describe('Sections or calls not run: budget, no key, too large.'),
+        inputTokens: z.number().int(),
+        outputTokens: z.number().int(),
+        cacheReadTokens: z.number().int(),
+        costUsd: z.number().nullable().describe('Null when a model has no known price.'),
+        latencyMs: z.number(),
+        budgetUsd: z.number().nullable().describe('Null when unlimited.'),
+        models: z.array(z.string()),
+      })
+      .optional()
+      .describe('Present when the run used `--llm`.'),
     summary: z.strictObject({
       files: z.number().int(),
       claims: z.number().int(),

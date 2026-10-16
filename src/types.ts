@@ -5,8 +5,12 @@
  * Positions are 1-based and point at the claim text itself, not its Markdown node.
  */
 
-/** `custom` claims are extracted for a plugin check, named in `meta.check`. */
-export type ClaimKind = 'path' | 'script' | 'command' | 'symbol' | 'snippet' | 'version' | 'custom';
+/**
+ * `custom` claims are extracted for a plugin check, named in `meta.check`. `section` claims are a
+ * whole Markdown section judged by a model (`--llm`).
+ */
+export type ClaimKind =
+  'path' | 'script' | 'command' | 'symbol' | 'snippet' | 'version' | 'section' | 'custom';
 
 /** Where in the Markdown the claim was found. Drives default severity: prose is opt-in. */
 export type ClaimSource = 'inline-code' | 'link' | 'fence' | 'prose';
@@ -29,7 +33,8 @@ export interface Claim {
 export type Severity = 'error' | 'warning';
 export type RuleLevel = Severity | 'off';
 
-export type BuiltinCheckId = 'paths' | 'scripts' | 'commands' | 'symbols' | 'snippets' | 'versions';
+export type BuiltinCheckId =
+  'paths' | 'scripts' | 'commands' | 'symbols' | 'snippets' | 'versions' | 'semantic';
 
 /** A built-in check id, or a plugin check id namespaced as `<plugin>/<check>`. */
 export type CheckId = string;
@@ -48,6 +53,10 @@ export interface Finding {
    * `code` when only the code did (the change made an unchanged claim false).
    */
   introducedBy?: 'docs' | 'code';
+  /** The model that judged the claim; set on model-judged findings only. */
+  model?: string;
+  /** A proposed rewrite of the claim's lines (`--fix`); lines are 1-based and inclusive. */
+  proposedFix?: { startLine: number; endLine: number; replacement: string };
 }
 
 export type CheckStatus = 'pass' | 'fail' | 'unknown';
@@ -161,6 +170,23 @@ export interface Comparison {
   notComparable: number;
 }
 
+/** What the model calls of a run cost and how many were not made. */
+export interface LlmTotals {
+  calls: number;
+  failedCalls: number;
+  /** Sections or calls not run: over budget, no key, too large. */
+  skipped: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  /** Null when a call used a model with no known price. */
+  costUsd: number | null;
+  latencyMs: number;
+  /** Null when unlimited. */
+  budgetUsd: number | null;
+  models: string[];
+}
+
 export interface Report {
   /** JSON schema version of this report shape. */
   version: 1;
@@ -169,6 +195,8 @@ export interface Report {
   /** Every reported finding (failing results whose baseline is unset or `new`), sorted by file, line, col. */
   findings: Finding[];
   comparison?: Comparison;
+  /** Present when the run used `--llm`. */
+  llm?: LlmTotals;
   summary: {
     files: number;
     claims: number;

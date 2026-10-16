@@ -32,7 +32,7 @@
               },
               "checkId": {
                 "type": "string",
-                "description": "Built-in: paths, scripts, commands, symbols, snippets, versions. Plugin checks are namespaced `<plugin>/<check>`."
+                "description": "Built-in: paths, scripts, commands, symbols, snippets, versions, semantic. Plugin checks are namespaced `<plugin>/<check>`."
               },
               "severity": {
                 "type": "string",
@@ -54,6 +54,36 @@
                 "enum": [
                   "docs",
                   "code"
+                ]
+              },
+              "model": {
+                "description": "The model that judged the claim (model-judged findings).",
+                "type": "string"
+              },
+              "proposedFix": {
+                "description": "A proposed rewrite of those lines (`--fix`).",
+                "type": "object",
+                "properties": {
+                  "startLine": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "1-based."
+                  },
+                  "endLine": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "1-based, inclusive."
+                  },
+                  "replacement": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "startLine",
+                  "endLine",
+                  "replacement"
                 ]
               }
             },
