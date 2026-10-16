@@ -74,6 +74,44 @@ describe('validateFix', () => {
     expect(validateFix(fix('The server listens on port 3000.'), INPUT)).toMatch(/nothing/);
   });
 
+  it.each([
+    ['a link without a scheme', 'Port 8080, see [x](evil.com/p).'],
+    ['a relative link', 'Port 8080, see [x](/relative).'],
+    ['an image', 'Port 8080 ![](http://host/?q=)'],
+    ['a mailto autolink', 'Port 8080 <mailto:a@b>'],
+    ['a reference definition', 'Port 8080.\n[ref]: evil.com'],
+    ['a bare domain', 'Port 8080, mirrored at evil.com.'],
+    ['a www link', 'Port 8080, see www.evil.example'],
+    ['an email', 'Port 8080, ask a@evil.io'],
+    ['an img tag', 'Port 8080 <img src=x>'],
+    ['a script tag', 'Port 8080 <script>x</script>'],
+    ['an a tag', 'Port 8080 <a href="x">y</a>'],
+  ])('rejects %s', (_, replacement) => {
+    expect(validateFix(fix(replacement), INPUT)).toMatch(/link, HTML or URL/);
+  });
+
+  it('compares headings, fences and indented code with the replaced lines only', () => {
+    // `## Server` is elsewhere in the section, not in the replaced line.
+    expect(validateFix(fix('## Server\nPort 8080.'), INPUT)).toMatch(/heading/);
+    expect(validateFix(fix('Port 8080.\n=='), INPUT)).toMatch(/heading/);
+    expect(validateFix(fix('Port 8080.\n```'), INPUT)).toMatch(/fenced/);
+    expect(validateFix(fix('Port 8080:\n    rm -rf /'), INPUT)).toMatch(/indented/);
+    expect(validateFix(fix('Port 8080:\n\trm -rf /'), INPUT)).toMatch(/indented/);
+    const code = { ...INPUT, body: '## Server\n    listen(3000)\nend' };
+    expect(validateFix(fix('    listen(8080)'), code)).toMatchObject({ startLine: 4 });
+  });
+
+  it('allows file names that look like domains', () => {
+    expect(validateFix(fix('Port 8080, see server.ts.'), INPUT)).toMatchObject({ startLine: 4 });
+  });
+
+  it('rejects invisible format characters', () => {
+    for (const cp of [0x202e, 0x200b, 0xe0041]) {
+      const r = validateFix(fix(`Port 8080${String.fromCodePoint(cp)}.`), INPUT);
+      expect(r).toMatch(/invisible/);
+    }
+  });
+
   it('allows the comment, URL and heading already in the section', () => {
     expect(validateFix(fix('See <!-- note --> https://x.dev now.', 5, 5), INPUT)).toMatchObject({
       startLine: 5,

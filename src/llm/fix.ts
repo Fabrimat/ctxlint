@@ -6,7 +6,7 @@ import { git } from '../git/diff.js';
 import type { Finding } from '../types.js';
 import { callWithBudget, type Budget } from './budget.js';
 import type { LlmProvider } from './provider.js';
-import { dataBlocks, dataRule, toJudgement, type SectionInput } from './semantic.js';
+import { dataBlocks, dataRule, failureReason, type SectionInput } from './prompt.js';
 
 export type ProposedFix = NonNullable<Finding['proposedFix']>;
 
@@ -44,12 +44,27 @@ export function buildFixPrompt(
 /** Lines that start a Markdown heading (ATX, or a setext underline). */
 const HEADING = /^ {0,3}(?:#{1,6}(?:[ \t]|$)|=+[ \t]*$|-+[ \t]*$)/;
 const FENCE = /^ {0,3}(?:`{3,}|~{3,})/;
-const URL = /[a-z][a-z0-9+.-]*:\/\/[^\s<>()[\]"'`]+|www\.[^\s<>()[\]"'`]+/gi;
+const INDENTED = /^(?: {4}|\t)\S/;
 const COMMENT = /<!--[\s\S]*?-->/g;
+/** Constructs that link or embed something: links, images, reference definitions, HTML, URLs. */
+const LINKING = [
+  /!?\[[^\]]*\]\([^)]*\)?/g,
+  /^ {0,3}\[[^\]]+\]:.*$/gm,
+  /<\/?[a-z][^>]*>?/gi,
+  /<[a-z][a-z0-9+.-]*:[^>]*>?/gi,
+  /[a-z][a-z0-9+.-]*:\/\/\S+/gi,
+  /\bmailto:\S+/gi,
+  /\bwww\.\S+/gi,
+  /(?<![\w/.-])(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi,
+];
+/** ponytail: file names look like domains; known extensions pass. Add more when fixes need them. */
+const FILE_EXTENSION =
+  /\.(?:[cm]?[jt]sx?|json|md|mdx|ya?ml|toml|lock|txt|sh|css|html?|py|rs|go|java|rb|d\.ts)$/i;
 
 /**
- * Checks a model's fix against the section (a trust boundary: agents may apply it). Returns the
- * normalised fix, or why it was rejected.
+ * Checks a model's fix against the section (a trust boundary: agents may apply it). Anything that
+ * structures or links (headings, fences, indented code, comments, links, HTML, URLs, domains) must
+ * already be in the replaced lines verbatim. Returns the normalised fix, or why it was rejected.
  */
 export function validateFix(raw: unknown, input: SectionInput): ProposedFix | string {
   const parsed = fixSchema.safeParse(raw);
@@ -59,26 +74,33 @@ export function validateFix(raw: unknown, input: SectionInput): ProposedFix | st
     return `lines ${startLine}-${endLine} are outside the section (${input.startLine}-${input.endLine})`;
   }
   const replacement = parsed.data.replacement.replace(/\r\n?/g, '\n').replace(/\n$/, '');
-  if (/(?![\t\n])[\p{Cc}\p{Zl}\p{Zp}]/u.test(replacement)) {
-    return 'the replacement has control characters';
+  if (/(?![\t\n])[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(replacement)) {
+    return 'the replacement has control or invisible characters';
   }
-  const lines = input.body.split('\n');
-  const replaced = lines
-    .slice(startLine - input.startLine, endLine - input.startLine + 1)
-    .join('\n');
+  const oldLines = input.body
+    .split('\n')
+    .slice(startLine - input.startLine, endLine - input.startLine + 1);
+  const replaced = oldLines.join('\n');
   if (replacement === replaced) return 'the fix changes nothing';
   if (replacement.length > MAX_REPLACEMENT || replacement.length > 2 * replaced.length) {
     return 'the replacement is too long';
   }
-  const known = new Set(lines.map((l) => l.trim()));
+  const known = new Set(oldLines.map((l) => l.trim()));
   const added = replacement.split('\n');
   if (added.some((l) => HEADING.test(l) && !known.has(l.trim()))) return 'the fix adds a heading';
   const fences = (ls: string[]): number => ls.filter((l) => FENCE.test(l)).length;
-  if (fences(added) > fences(replaced.split('\n'))) return 'the fix adds a fenced block';
-  const comments = replacement.replace(COMMENT, (c) => (input.body.includes(c) ? '' : '<!--'));
+  if (fences(added) !== fences(oldLines)) return 'the fix changes a fenced block';
+  if (added.some((l) => INDENTED.test(l)) && !oldLines.some((l) => INDENTED.test(l))) {
+    return 'the fix adds an indented code block';
+  }
+  const comments = replacement.replace(COMMENT, (c) => (replaced.includes(c) ? '' : '<!--'));
   if (/<!--|-->/.test(comments)) return 'the fix adds an HTML comment';
-  if ((replacement.match(URL) ?? []).some((u) => !input.body.includes(u))) {
-    return 'the fix adds a URL';
+  for (const re of LINKING) {
+    for (const token of replacement.match(re) ?? []) {
+      if (re === LINKING.at(-1) && FILE_EXTENSION.test(token)) continue;
+      if (!replaced.includes(token))
+        return `the fix adds a link, HTML or URL: ${token.slice(0, 40)}`;
+    }
   }
   return { startLine, endLine, replacement };
 }
@@ -101,8 +123,7 @@ export async function proposeFix(
     maxTokens: FIX_MAX_TOKENS,
   });
   if (!res.ok) {
-    const j = toJudgement(res, input);
-    return { reason: j.status === 'unknown' ? j.reason : res.reason };
+    return { reason: failureReason(res) };
   }
   const fix = validateFix(res.value, input);
   if (typeof fix === 'string') {

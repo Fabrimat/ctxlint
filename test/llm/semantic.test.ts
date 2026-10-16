@@ -7,12 +7,12 @@ import {
   buildPrompt,
   judgeSection,
   locateQuote,
-  oneLine,
   sectionInput,
   selectSections,
   type SectionInput,
   type Selected,
 } from '../../src/llm/semantic.js';
+import { oneLine } from '../../src/llm/prompt.js';
 import { sectionsOf } from '../../src/parse/sections.js';
 import type { CheckResult, ClaimKind } from '../../src/types.js';
 import { makeClaim } from '../helpers/repo.js';
@@ -122,6 +122,8 @@ describe('judgeSection validation', () => {
     expect(e.length).toBeLessThanOrEqual(300);
     expect(e.startsWith('line one line two hidden x')).toBe(true);
     expect(oneLine('<<!---->!-- x -->')).toBe('x');
+    const hidden = [0x202e, 0x200b, 0xe0041].map((c) => String.fromCodePoint(c)).join('');
+    expect(oneLine(`a${hidden}b`)).toBe('a b');
   });
 
   it('turns unsure, invalid, refused and no-key answers into unknown', async () => {
