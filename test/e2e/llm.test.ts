@@ -1,4 +1,6 @@
-import { resolve } from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { main } from '../../src/cli.js';
 
@@ -50,9 +52,25 @@ describe('check LLM flags', () => {
   });
 
   it('accepts --llm, --fix, --patch and --llm-dump', async () => {
-    for (const flags of [['--llm'], ['--fix'], ['--patch', 'x.patch'], ['--llm-dump', 'd']]) {
-      expect((await run(['check', '--root', clean, ...flags])).code).toBe(0);
+    const out = mkdtempSync(join(tmpdir(), 'ctxtruth-llm-'));
+    try {
+      const patch = join(out, 'x.patch');
+      const dump = join(out, 'd');
+      for (const flags of [['--llm'], ['--fix'], ['--patch', patch], ['--llm-dump', dump]]) {
+        const { code, err } = await run(['check', '--root', clean, '--llm-scope', 'all', ...flags]);
+        expect(code).toBe(0);
+        expect(err).not.toContain('error:');
+      }
+    } finally {
+      rmSync(out, { recursive: true, force: true });
     }
+  });
+
+  it('needs a base ref for the changed scope', async () => {
+    const { code, err } = await run(['check', '--root', clean, '--llm']);
+    expect(code).toBe(2);
+    expect(err).toContain('--base <ref>');
+    expect(err).toContain('--llm-scope all');
   });
 
   it('is not offered by blame or history', async () => {

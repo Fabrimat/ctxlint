@@ -174,7 +174,10 @@ export async function blame(opts: BlameOptions): Promise<BlameReport> {
   const root = resolve(opts.root);
   await assertFullHistory(root);
   const loaded = await load(root, opts);
-  const { report } = await checkLoaded(opts, loaded);
+  // Never model-judged: blame follows the verified findings only.
+  const plain: CheckOptions = { ...opts };
+  delete plain.llm;
+  const { report } = await checkLoaded(plain, loaded);
   const results = reportedResults(report);
   const chain = await firstParentChain(root);
   if (chain.length === 0) throw new Error('blame needs at least one commit');

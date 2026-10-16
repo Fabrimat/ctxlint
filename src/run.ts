@@ -10,7 +10,16 @@ import { changedOnly, classify, ENVIRONMENT_CHECKS, renamed } from './compare.js
 import { changedFiles, resolveBase } from './git/diff.js';
 import { withWorktree } from './git/worktree.js';
 import { buildReport } from './report/index.js';
-import type { Check, CheckResult, Claim, Comparison, RepoIndex, Report } from './types.js';
+import type { LlmProvider } from './llm/provider.js';
+import type {
+  Check,
+  CheckResult,
+  Claim,
+  Comparison,
+  LlmTotals,
+  RepoIndex,
+  Report,
+} from './types.js';
 
 export interface LlmOptions {
   enabled: true;
@@ -22,6 +31,8 @@ export interface LlmOptions {
   scope?: 'changed' | 'all';
   /** Directory to write prompts and responses to (`--llm-dump`, debugging). */
   dump?: string;
+  /** Use this provider instead of the configured one (tests and programmatic use). */
+  provider?: LlmProvider;
 }
 
 export interface CheckOptions {
@@ -188,6 +199,13 @@ export async function checkLoaded(opts: CheckOptions, loaded: Loaded): Promise<C
   if (compare && opts.base === undefined) {
     throw new Error('--changed-only and --new-only need a base ref (--base <ref>)');
   }
+  const semantic = opts.llm !== undefined && loaded.config.rules.semantic !== 'off';
+  const llmScope = opts.llm?.scope ?? loaded.config.llm.scope;
+  if (semantic && llmScope === 'changed' && opts.base === undefined) {
+    throw new Error(
+      '--llm judges the sections changed since a base ref: pass --base <ref>, or --llm-scope all',
+    );
+  }
   const started = performance.now();
   const root = resolve(opts.root);
   const { config } = loaded;
@@ -196,12 +214,13 @@ export async function checkLoaded(opts: CheckOptions, loaded: Loaded): Promise<C
   const inScope = (f: string): boolean =>
     prefixes.length === 0 || prefixes.some((p) => p === '' || f === p || f.startsWith(`${p}/`));
 
-  // --base alone is inert: git is only touched when a comparison is asked for.
-  const ref = compare ? (opts.base as string) : undefined;
+  // --base alone is inert: git is only touched when a comparison or --llm asks for it.
+  const ref = compare || semantic ? opts.base : undefined;
   const base = ref === undefined ? undefined : await resolveBase(root, ref);
   const diff = base === undefined ? undefined : await changedFiles(root, base.sha);
 
   let { results, docFiles } = await runOnce(root, loaded, inScope);
+  const all = { results, docFiles };
   let comparison: Comparison | undefined;
 
   if (base !== undefined && diff !== undefined) {
@@ -234,14 +253,29 @@ export async function checkLoaded(opts: CheckOptions, loaded: Loaded): Promise<C
     }
   }
 
+  let llm: LlmTotals | undefined;
+  if (semantic && opts.llm) {
+    const { semantic: judge } = await import('./llm/semantic.js');
+    const out = await judge({
+      root,
+      config,
+      llm: opts.llm,
+      results: all.results,
+      docFiles: all.docFiles,
+      ...(base !== undefined && diff !== undefined && { base: { sha: base.sha, diff } }),
+      compared: opts.newOnly === true,
+      ...(opts.onWarning && { onWarning: opts.onWarning }),
+    });
+    results = [...results, ...out.results];
+    llm = out.totals;
+  }
+
   const report = buildReport(results, docFiles, {
     toolVersion: await toolVersion(),
     durationMs: Math.round(performance.now() - started),
   });
   if (comparison !== undefined) report.comparison = comparison;
-  if (opts.llm) {
-    // Semantic post-step: see src/llm/semantic.ts (dynamic import; sets report.llm and findings).
-  }
+  if (llm !== undefined) report.llm = llm;
   const descriptions = Object.fromEntries(
     loaded.checks.flatMap((c) => (c.description === undefined ? [] : [[c.id, c.description]])),
   );
