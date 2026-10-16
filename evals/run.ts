@@ -20,10 +20,12 @@ const { defaultConfig } = await load<{ defaultConfig: typeof DefaultConfig }>(
 const { Budget, estimateTokens } = await load<typeof BudgetMod>('../dist/llm/budget.js');
 const { DEFAULT_PRICING, costUsd } = await load<typeof PricingMod>('../dist/llm/pricing.js');
 const { createProvider } = await load<typeof ProviderMod>('../dist/llm/provider.js');
-const { buildPrompt, judgeSection } = await load<typeof SemanticMod>('../dist/llm/semantic.js');
+const {
+  buildPrompt,
+  judgeSection,
+  JUDGE_MAX_TOKENS: MAX_TOKENS,
+} = await load<typeof SemanticMod>('../dist/llm/semantic.js');
 
-// ponytail: keep equal to JUDGE_MAX_TOKENS in src/llm/semantic.ts (not exported); only the dry-run estimate uses it.
-const MAX_TOKENS = 1500;
 const CONCURRENCY = 4;
 
 const { values } = parseArgs({
