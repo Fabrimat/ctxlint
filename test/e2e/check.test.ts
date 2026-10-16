@@ -232,3 +232,24 @@ describe('check() on a repo with a documentation site', () => {
     expect(report.skipped).toBeUndefined();
   });
 });
+
+describe('check() on historical records', () => {
+  it('skips decision records and release notes by default', async () => {
+    const r = makeTmpRepo({
+      'docs/adrs/001-x.md': 'Uses `src/old.ts`.\n',
+      'docs/releases/v1.md': 'Adds `src/new.ts`.\n',
+      'docs/guide.md': 'Hi.\n',
+      'docs/adrs/AGENTS.md': 'Hi.\n',
+    });
+    try {
+      const { report } = await check({ root: r.dir });
+      expect(report.files.map((f) => f.file)).toEqual(['docs/adrs/AGENTS.md', 'docs/guide.md']);
+      expect(report.skipped).toEqual([
+        { dir: 'docs/adrs', reason: 'decision records', files: 1 },
+        { dir: 'docs/releases', reason: 'release notes', files: 1 },
+      ]);
+    } finally {
+      r.cleanup();
+    }
+  });
+});

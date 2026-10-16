@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { checks as builtins } from './checks/index.js';
 import { AGENT_TARGETS, DEFAULT_TARGETS, loadConfig, type Config } from './config/index.js';
-import { buildRepoIndex, matchesAny, siteOf } from './index/index.js';
+import { buildRepoIndex, historyOf, matchesAny, siteOf } from './index/index.js';
 import { parseMarkdown, type ParseOptions } from './parse/index.js';
 import type { IgnoreRegion } from './parse/markers.js';
 import { changedOnly, classify, ENVIRONMENT_CHECKS, renamed } from './compare.js';
@@ -148,14 +148,17 @@ export async function collectClaims(
         inScope(f),
     )
     .sort();
-  // Default targets only: the pages of a documentation site describe the users' projects.
+  // Default targets only: the pages of a documentation site describe the users' projects, and
+  // historical records (decisions, release notes) the code as it was.
   const skipped = new Map<string, Skipped>();
   const docFiles = matched.filter((f) => {
-    const site = config.targets === undefined ? siteOf(f, index.sites) : undefined;
-    if (site === undefined || matchesAny(f, AGENT_TARGETS)) return true;
-    const s = skipped.get(site.dir) ?? { dir: site.dir, reason: `${site.kind} site`, files: 0 };
+    if (config.targets !== undefined || matchesAny(f, AGENT_TARGETS)) return true;
+    const site = siteOf(f, index.sites);
+    const skip = site ? { dir: site.dir, reason: `${site.kind} site` } : historyOf(f);
+    if (skip === undefined) return true;
+    const s = skipped.get(skip.dir) ?? { ...skip, files: 0 };
     s.files++;
-    skipped.set(site.dir, s);
+    skipped.set(skip.dir, s);
     return false;
   });
   const claims: Claim[] = [];

@@ -5,7 +5,7 @@ import { findSites } from './sites.js';
 
 export { buildFileIndex } from './files.js';
 export { globToRegExp, matchesAny } from './glob.js';
-export { siteOf } from './sites.js';
+export { historyOf, siteOf } from './sites.js';
 
 export async function buildRepoIndex(root: string, depsRoot?: string): Promise<RepoIndex> {
   const files = buildFileIndex(await listFiles(root));
