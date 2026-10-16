@@ -12,6 +12,18 @@ import { withWorktree } from './git/worktree.js';
 import { buildReport } from './report/index.js';
 import type { Check, CheckResult, Claim, Comparison, RepoIndex, Report } from './types.js';
 
+export interface LlmOptions {
+  enabled: true;
+  /** Propose rewrites for the findings (`--fix`). */
+  fix: boolean;
+  /** Write the proposed rewrites as a patch to this file (`--patch`). */
+  patch?: string;
+  maxCost?: number | 'unlimited';
+  scope?: 'changed' | 'all';
+  /** Directory to write prompts and responses to (`--llm-dump`, debugging). */
+  dump?: string;
+}
+
 export interface CheckOptions {
   /** Repository root. */
   root: string;
@@ -32,6 +44,8 @@ export interface CheckOptions {
   newOnly?: boolean;
   /** The repository is untrusted: never import its config or plugin code. */
   untrusted?: boolean;
+  /** Model-judged checks (`--llm`). Absent: no model is called and no SDK is loaded. */
+  llm?: LlmOptions;
   /** Receives non-fatal configuration warnings (e.g. a rule for a plugin that is not loaded). */
   onWarning?: (message: string) => void;
 }
@@ -225,6 +239,9 @@ export async function checkLoaded(opts: CheckOptions, loaded: Loaded): Promise<C
     durationMs: Math.round(performance.now() - started),
   });
   if (comparison !== undefined) report.comparison = comparison;
+  if (opts.llm) {
+    // Semantic post-step: see src/llm/semantic.ts (dynamic import; sets report.llm and findings).
+  }
   const descriptions = Object.fromEntries(
     loaded.checks.flatMap((c) => (c.description === undefined ? [] : [[c.id, c.description]])),
   );

@@ -2,7 +2,7 @@
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CommanderError, Command, Option } from 'commander';
+import { CommanderError, Command, InvalidArgumentError, Option } from 'commander';
 import type { HistoryFormat } from './report/history.js';
 import type { Severity } from './types.js';
 
@@ -29,7 +29,22 @@ interface CheckFlags {
   root?: string;
   failOn?: 'error' | 'warning' | 'none';
   verbose?: boolean;
+  llm?: boolean;
+  maxCost?: number | 'unlimited';
+  llmScope?: 'changed' | 'all';
+  fix?: boolean;
+  patch?: string;
+  llmDump?: string;
   color: boolean;
+}
+
+function parseMaxCost(v: string): number | 'unlimited' {
+  if (v === 'unlimited') return v;
+  const n = Number(v);
+  if (v.trim() === '' || !Number.isFinite(n) || n < 0) {
+    throw new InvalidArgumentError('expected a USD amount or "unlimited"');
+  }
+  return n;
 }
 
 const version = (): string =>
@@ -109,9 +124,26 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
       ).choices(['error', 'warning', 'none']),
     )
     .option('--verbose', 'also list claims that could not be verified')
+    .option('--llm', 'also judge doc sections against the code with a model (needs an API key)')
+    .addOption(
+      new Option(
+        '--max-cost <usd|unlimited>',
+        'spend ceiling for --llm (default: config, 1.00)',
+      ).argParser(parseMaxCost),
+    )
+    .addOption(
+      new Option('--llm-scope <scope>', 'sections --llm judges (default: config, changed)').choices(
+        ['changed', 'all'],
+      ),
+    )
+    .option('--fix', 'propose rewrites for the model-judged findings (implies --llm)')
+    .option('--patch <file>', 'write the proposed rewrites as a patch (implies --fix)')
+    .option('--llm-dump <dir>', 'debug: write the prompts and responses of --llm to this directory')
     .option('--no-color', 'disable coloured output')
     .exitOverride()
     .action(async (paths: string[], flags: CheckFlags) => {
+      const fix = flags.fix === true || flags.patch !== undefined;
+      const llm = flags.llm === true || fix || flags.llmDump !== undefined;
       const { check } = await import('./run.js');
       const { formatReport } = await import('./report/index.js');
       const root = resolve(io.cwd, flags.root ?? '.');
@@ -126,6 +158,16 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         ...(flags.newOnly && { newOnly: true }),
         onWarning,
         ...(flags.untrusted && { untrusted: true }),
+        ...(llm && {
+          llm: {
+            enabled: true as const,
+            fix,
+            ...(flags.patch !== undefined && { patch: resolve(io.cwd, flags.patch) }),
+            ...(flags.maxCost !== undefined && { maxCost: flags.maxCost }),
+            ...(flags.llmScope !== undefined && { scope: flags.llmScope }),
+            ...(flags.llmDump !== undefined && { dump: resolve(io.cwd, flags.llmDump) }),
+          },
+        }),
       });
       if (paths.length > 0 && report.files.length === 0) {
         // A typo in a CI path argument must not pass silently.
