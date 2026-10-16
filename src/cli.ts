@@ -143,7 +143,11 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
     .exitOverride()
     .action(async (paths: string[], flags: CheckFlags) => {
       const fix = flags.fix === true || flags.patch !== undefined;
-      const llm = flags.llm === true || fix || flags.llmDump !== undefined;
+      const llm = flags.llm === true || fix;
+      if (flags.llmDump !== undefined && !llm) {
+        // A debug flag must not turn on paid calls by itself.
+        throw new Error('--llm-dump needs --llm');
+      }
       const { check } = await import('./run.js');
       const { formatReport } = await import('./report/index.js');
       const root = resolve(io.cwd, flags.root ?? '.');
@@ -162,6 +166,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
           llm: {
             enabled: true as const,
             fix,
+            env: io.env,
             ...(flags.patch !== undefined && { patch: resolve(io.cwd, flags.patch) }),
             ...(flags.maxCost !== undefined && { maxCost: flags.maxCost }),
             ...(flags.llmScope !== undefined && { scope: flags.llmScope }),

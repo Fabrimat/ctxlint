@@ -116,7 +116,13 @@ describe('validateFix', () => {
     expect(validateFix(fix('See <!-- note --> https://x.dev now.', 5, 5), INPUT)).toMatchObject({
       startLine: 5,
     });
-    expect(validateFix(fix('## Server', 3, 3), INPUT)).toMatch(/nothing/);
+    expect(validateFix(fix('## Server', 3, 3), INPUT)).toMatch(/heading/);
+  });
+
+  it('never replaces the heading line, but may in the preamble', () => {
+    expect(validateFix(fix('Port 8080.', 3, 4), INPUT)).toMatch(/section heading/);
+    const preamble = { ...INPUT, path: [], body: 'Intro.\nThe server listens on port 3000.' };
+    expect(validateFix(fix('Intro now.', 3, 3), preamble)).toMatchObject({ startLine: 3 });
   });
 });
 

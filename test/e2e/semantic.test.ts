@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { blame } from '../../src/blame.js';
 import { history } from '../../src/history.js';
 import { FakeProvider } from '../../src/llm/fake.js';
 import { failing, type LlmRequest, type LlmResponse } from '../../src/llm/provider.js';
+import { readInside } from '../../src/llm/semantic.js';
 import { formatReport } from '../../src/report/index.js';
 import { check, type CheckOptions, type LlmOptions } from '../../src/run.js';
 import { makeTmpRepo } from '../helpers/tmp.js';
@@ -135,6 +136,76 @@ describe('check --llm', { timeout: 60_000 }, () => {
     await expect(
       run(dir.dir, { llm: llm(new FakeProvider(answer), { scope: 'all' }) }),
     ).rejects.toThrow(/^comparing with a base ref needs a git repository/);
+  });
+
+  it('leaves an unchanged section unattributed under --new-only and scope all', async () => {
+    const r = repo();
+    r.git('branch', '-f', 'base', 'HEAD');
+    const { report } = await run(r.dir, {
+      newOnly: true,
+      llm: llm(new FakeProvider(answer), { scope: 'all' }),
+    });
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.introducedBy).toBeUndefined();
+  });
+
+  it('warns that nothing runs when the semantic rule is off', async () => {
+    const r = repo();
+    writeFileSync(join(r.dir, 'ctxtruth.config.json'), '{"rules":{"semantic":"off"}}');
+    const warnings: string[] = [];
+    const provider = new FakeProvider(answer);
+    const { report } = await check({
+      root: r.dir,
+      llm: llm(provider),
+      onWarning: (w) => warnings.push(w),
+    });
+    expect(warnings).toEqual(['--llm: rule `semantic` is off, so no section is judged']);
+    expect(provider.requests).toHaveLength(0);
+    expect(report.llm).toBeUndefined();
+  });
+
+  it('reads the API key from the given env, not the process env', async () => {
+    const r = repo();
+    writeFileSync(
+      join(r.dir, 'ctxtruth.config.json'),
+      '{"llm":{"provider":"openai","models":{"classify":"gpt-test"},"pricing":{"gpt-test":{"input":1,"output":1}}}}',
+    );
+    const saved = process.env['OPENAI_API_KEY'];
+    process.env['OPENAI_API_KEY'] = 'sk-process-env';
+    try {
+      const warnings: string[] = [];
+      const env = {};
+      await check({
+        root: r.dir,
+        llm: llm(undefined, { scope: 'all', env }),
+        onWarning: (w) => warnings.push(w),
+      });
+      expect(env).toEqual({});
+      expect(warnings).toEqual([
+        '--llm: OPENAI_API_KEY is not set; the model-judged checks were not run',
+      ]);
+    } finally {
+      if (saved === undefined) delete process.env['OPENAI_API_KEY'];
+      else process.env['OPENAI_API_KEY'] = saved;
+    }
+  });
+
+  it('never sends a symlinked file', async (ctx) => {
+    const r = repo();
+    writeFileSync(join(r.dir, 'secret.txt'), 'TOKEN=hunter2\n');
+    try {
+      symlinkSync(join(r.dir, 'secret.txt'), join(r.dir, 'src', 'link.ts'), 'file');
+    } catch {
+      ctx.skip();
+    }
+    writeFileSync(join(r.dir, 'AGENTS.md'), `${DOC}\nSee \`src/link.ts\`.\n`);
+    const provider = new FakeProvider(answer);
+    await run(r.dir, { llm: llm(provider, { scope: 'all' }) });
+    expect(provider.requests.length).toBeGreaterThan(0);
+    for (const q of provider.requests) expect(q.prompt).not.toContain('hunter2');
+    expect(await readInside(r.dir, 'src/link.ts')).toBeNull();
+    expect(await readInside(r.dir, '.git/config')).toBeNull();
+    expect((await readInside(r.dir, 'src/server.ts'))?.toString()).toContain('8080');
   });
 
   it('skips the sections over a tiny --max-cost and reports them', async () => {

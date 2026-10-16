@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { isAbsolute, join, sep } from 'node:path';
 import type { Config } from '../config/index.js';
 import { git, type ChangedFiles } from '../git/diff.js';
 import { sectionsOf, type Section } from '../parse/sections.js';
@@ -177,8 +177,22 @@ export interface InputLimits {
   maxSectionBytes: number;
 }
 
-/** A resolved file name a check could have returned that is not repo-relative. */
-const outside = (f: string): boolean => isAbsolute(f) || f.split(/[\\/]/).includes('..');
+/**
+ * The bytes of `path` under `root`; null when it is missing, a symlink, inside `.git` or resolves
+ * outside the root. Whatever is read here is sent to the provider.
+ */
+export async function readInside(root: string, path: string): Promise<Buffer | null> {
+  if (isAbsolute(path) || path.split(/[\\/]/).some((s) => s === '..' || s === '.git')) return null;
+  const full = join(root, path);
+  try {
+    if ((await lstat(full)).isSymbolicLink()) return null;
+    const [real, top] = await Promise.all([realpath(full), realpath(root)]);
+    if (!real.startsWith(top.endsWith(sep) ? top : top + sep)) return null;
+    return await readFile(full);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The judge's input for a selected section, or why it cannot be judged. Nothing is truncated:
@@ -201,18 +215,13 @@ export async function sectionInput(
   const ordered = [
     ...sel.resolved.filter((f) => isChanged(f)),
     ...sel.resolved.filter((f) => !isChanged(f)),
-  ]
-    .filter((f) => !outside(f))
-    .slice(0, limits.maxFiles);
+  ].slice(0, limits.maxFiles);
   const files: SectionInput['files'] = [];
   for (const path of ordered) {
     const changed = isChanged(path);
-    let buf: Buffer;
-    try {
-      buf = await readFile(join(root, path));
-    } catch {
-      continue; // deleted since the base: the diff shows it
-    }
+    // Missing (deleted since the base: the diff shows it), a symlink, or outside the root.
+    const buf = await readInside(root, path);
+    if (buf === null) continue;
     if (buf.length > limits.maxFileBytes) {
       if (changed) {
         return {
@@ -317,9 +326,10 @@ export async function semantic(run: SemanticRun): Promise<{
   let warnedKey = false;
   let dumped = 0;
   const provider = tap(
-    llm.provider ?? (await createProvider(config.llm, process.env)),
+    llm.provider ?? (await createProvider(config.llm, llm.env ?? process.env)),
     async (req, res) => {
-      if (!res.ok && res.reason === 'no-key' && !warnedKey) {
+      // Never sent: no key, no SDK, a rejected key. Every other section fails the same way.
+      if (!res.ok && res.sent === false && !warnedKey) {
         warnedKey = true;
         run.onWarning?.(`--llm: ${oneLine(res.detail)}; the model-judged checks were not run`);
       }
@@ -339,7 +349,9 @@ export async function semantic(run: SemanticRun): Promise<{
   const docs = new Map<string, Section[]>();
   const lines = new Map<string, string[]>();
   for (const file of run.docFiles) {
-    const text = await readFile(join(root, file), 'utf8');
+    const buf = await readInside(root, file);
+    if (buf === null) continue;
+    const text = buf.toString('utf8');
     docs.set(file, sectionsOf(text));
     lines.set(file, text.split(/\r?\n/));
   }
@@ -405,9 +417,13 @@ export async function semantic(run: SemanticRun): Promise<{
     };
     if (run.compared) {
       result.baseline = 'new';
-      (result.finding as NonNullable<CheckResult['finding']>).introducedBy = changed?.has(sel.file)
+      // Attributed only when the section's doc or code changed; scope `all` judges unchanged ones.
+      const by = changed?.has(sel.file)
         ? 'docs'
-        : 'code';
+        : sel.resolved.some((f) => changed?.has(f))
+          ? 'code'
+          : undefined;
+      if (by !== undefined && result.finding) result.finding.introducedBy = by;
     }
     return result;
   });

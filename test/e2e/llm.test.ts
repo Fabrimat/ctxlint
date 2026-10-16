@@ -56,14 +56,27 @@ describe('check LLM flags', () => {
     try {
       const patch = join(out, 'x.patch');
       const dump = join(out, 'd');
-      for (const flags of [['--llm'], ['--fix'], ['--patch', patch], ['--llm-dump', dump]]) {
+      for (const flags of [
+        ['--llm'],
+        ['--fix'],
+        ['--patch', patch],
+        ['--llm', '--llm-dump', dump],
+      ]) {
         const { code, err } = await run(['check', '--root', clean, '--llm-scope', 'all', ...flags]);
         expect(code).toBe(0);
         expect(err).not.toContain('error:');
+        // The env is empty and the SDK cannot load: one warning, nothing sent.
+        expect(err.match(/warning: --llm:/g)).toHaveLength(1);
       }
     } finally {
       rmSync(out, { recursive: true, force: true });
     }
+  });
+
+  it('refuses --llm-dump without --llm', async () => {
+    const { code, err } = await run(['check', '--root', clean, '--llm-dump', 'd']);
+    expect(code).toBe(2);
+    expect(err).toContain('--llm-dump needs --llm');
   });
 
   it('needs a base ref for the changed scope', async () => {

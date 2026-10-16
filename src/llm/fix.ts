@@ -73,6 +73,10 @@ export function validateFix(raw: unknown, input: SectionInput): ProposedFix | st
   if (startLine > endLine || startLine < input.startLine || endLine > input.endLine) {
     return `lines ${startLine}-${endLine} are outside the section (${input.startLine}-${input.endLine})`;
   }
+  // The heading stays: dropping it would merge the section into the one before.
+  if (input.path.length > 0 && startLine === input.startLine) {
+    return `the fix replaces the section heading (line ${startLine})`;
+  }
   const replacement = parsed.data.replacement.replace(/\r\n?/g, '\n').replace(/\n$/, '');
   if (/(?![\t\n])[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(replacement)) {
     return 'the replacement has control or invisible characters';

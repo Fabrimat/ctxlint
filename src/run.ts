@@ -33,6 +33,8 @@ export interface LlmOptions {
   dump?: string;
   /** Use this provider instead of the configured one (tests and programmatic use). */
   provider?: LlmProvider;
+  /** Environment the provider reads its API key from. Defaults to the process environment. */
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface CheckOptions {
@@ -200,6 +202,9 @@ export async function checkLoaded(opts: CheckOptions, loaded: Loaded): Promise<C
     throw new Error('--changed-only and --new-only need a base ref (--base <ref>)');
   }
   const semantic = opts.llm !== undefined && loaded.config.rules.semantic !== 'off';
+  if (opts.llm !== undefined && !semantic) {
+    opts.onWarning?.('--llm: rule `semantic` is off, so no section is judged');
+  }
   const llmScope = opts.llm?.scope ?? loaded.config.llm.scope;
   if (semantic && llmScope === 'changed' && opts.base === undefined) {
     throw new Error(
