@@ -48,7 +48,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "schema": "node scripts/schema.ts",
-    "dogfood": "node dist/cli.js check"
+    "dogfood": "node dist/cli.js check",
+    "evals": "node evals/run.ts"
   },
   "dependencies": {
     "commander": "^15.0.0",
