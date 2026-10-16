@@ -1,0 +1,25 @@
+{
+  "id": "second-file-drift",
+  "category": "multi-file",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/limits.md",
+    "path": ["API", "Rate limits"],
+    "body": "Each API key may send 100 requests per minute. When the limit is exceeded the server answers `429` with a `Retry-After` header.\n"
+  },
+  "files": [
+    {
+      "path": "src/server/limiter.ts",
+      "content": "export class Limiter {\n  private hits = new Map<string, number[]>();\n\n  constructor(\n    private readonly limit: number,\n    private readonly windowMs: number,\n  ) {}\n\n  /** Returns 0 when allowed, otherwise the number of ms to wait. */\n  check(key: string, now = Date.now()): number {\n    const recent = (this.hits.get(key) ?? []).filter((t) => now - t < this.windowMs);\n    if (recent.length >= this.limit) {\n      this.hits.set(key, recent);\n      return this.windowMs - (now - recent[0]!);\n    }\n    recent.push(now);\n    this.hits.set(key, recent);\n    return 0;\n  }\n}\n",
+      "changed": false
+    },
+    {
+      "path": "src/server/index.ts",
+      "content": "import { createServer } from 'node:http';\nimport { Limiter } from './limiter.js';\n\nconst limiter = new Limiter(60, 60_000);\n\nexport const server = createServer((req, res) => {\n  const key = String(req.headers['x-api-key'] ?? 'anonymous');\n  const wait = limiter.check(key);\n  if (wait > 0) {\n    res.writeHead(429, { 'Retry-After': String(Math.ceil(wait / 1000)) });\n    res.end('rate limited');\n    return;\n  }\n  res.writeHead(200, { 'content-type': 'application/json' });\n  res.end(JSON.stringify({ ok: true }));\n});\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "The limiter is constructed with 60 per minute in the second file; the first file is generic."
+}

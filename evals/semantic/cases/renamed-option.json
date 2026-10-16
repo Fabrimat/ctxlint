@@ -1,0 +1,20 @@
+{
+  "id": "renamed-option",
+  "category": "near-miss",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/worker.md",
+    "path": ["Worker", "Options"],
+    "body": "Create a worker with `createWorker({ concurrency, maxRetries })`. `maxRetries` is how many times a failed job is put back on the queue.\n"
+  },
+  "files": [
+    {
+      "path": "src/worker.ts",
+      "content": "export interface WorkerOptions {\n  concurrency?: number;\n  retries?: number;\n}\n\ntype Job = () => Promise<void>;\n\nexport function createWorker({ concurrency = 2, retries = 1 }: WorkerOptions = {}) {\n  const queue: { job: Job; left: number }[] = [];\n  let running = 0;\n\n  const pump = (): void => {\n    while (running < concurrency && queue.length > 0) {\n      const item = queue.shift()!;\n      running++;\n      item\n        .job()\n        .catch(() => {\n          if (item.left > 0) queue.push({ job: item.job, left: item.left - 1 });\n        })\n        .finally(() => {\n          running--;\n          pump();\n        });\n    }\n  };\n\n  return {\n    add(job: Job): void {\n      queue.push({ job, left: retries });\n      pump();\n    },\n  };\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": "--- a/src/worker.ts\n+++ b/src/worker.ts\n@@ -1,4 +1,4 @@\n export interface WorkerOptions {\n   concurrency?: number;\n-  maxRetries?: number;\n+  retries?: number;\n }\n",
+  "note": "maxRetries was renamed to retries."
+}

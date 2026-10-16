@@ -1,0 +1,20 @@
+{
+  "id": "async-vs-sync",
+  "category": "near-miss",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/config.md",
+    "path": ["Config", "loadConfig"],
+    "body": "`loadConfig(path)` is synchronous and returns the parsed config object directly, so it is safe to call at module top level.\n"
+  },
+  "files": [
+    {
+      "path": "src/config.ts",
+      "content": "import { readFile } from 'node:fs/promises';\n\nexport interface Config {\n  name: string;\n  verbose: boolean;\n  include: string[];\n}\n\nconst defaults: Config = { name: 'app', verbose: false, include: ['src'] };\n\nexport async function loadConfig(path: string): Promise<Config> {\n  const text = await readFile(path, 'utf8');\n  const parsed = JSON.parse(text) as Partial<Config>;\n  return { ...defaults, ...parsed };\n}\n\nexport function chunk<T>(items: readonly T[], size: number): T[][] {\n  const out: T[][] = [];\n  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));\n  return out;\n}\n\nexport function clamp(value: number, min: number, max: number): number {\n  return Math.min(max, Math.max(min, value));\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -1,4 +1,4 @@\n-import { readFileSync } from 'node:fs';\n+import { readFile } from 'node:fs/promises';\n",
+  "note": "loadConfig became async and returns a Promise."
+}

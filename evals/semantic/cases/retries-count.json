@@ -1,0 +1,20 @@
+{
+  "id": "retries-count",
+  "category": "near-miss",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/http.md",
+    "path": ["HTTP", "Retries"],
+    "body": "Failed requests are retried up to 3 times with exponential backoff (200 ms, 400 ms, 800 ms).\nOnly network errors and 5xx responses are retried; 4xx responses fail immediately.\n"
+  },
+  "files": [
+    {
+      "path": "src/http.ts",
+      "content": "import { setTimeout as sleep } from 'node:timers/promises';\n\nexport const MAX_RETRIES = 4;\nconst BASE_DELAY_MS = 200;\n\nexport class HttpError extends Error {\n  constructor(\n    readonly status: number,\n    message: string,\n  ) {\n    super(message);\n    this.name = 'HttpError';\n  }\n}\n\nfunction shouldRetry(err: unknown): boolean {\n  if (err instanceof HttpError) return err.status >= 500;\n  return err instanceof TypeError; // fetch rejects with TypeError on network failure\n}\n\nexport async function request(url: string, init?: RequestInit): Promise<Response> {\n  let attempt = 0;\n  for (;;) {\n    try {\n      const res = await fetch(url, init);\n      if (res.status >= 400) throw new HttpError(res.status, res.statusText);\n      return res;\n    } catch (err) {\n      if (attempt >= MAX_RETRIES || !shouldRetry(err)) throw err;\n      await sleep(BASE_DELAY_MS * 2 ** attempt);\n      attempt++;\n    }\n  }\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": "--- a/src/http.ts\n+++ b/src/http.ts\n@@ -2,3 +2,3 @@\n import { setTimeout as sleep } from 'node:timers/promises';\n\n-export const MAX_RETRIES = 3;\n+export const MAX_RETRIES = 4;\n",
+  "note": "The code retries up to 4 times, the doc says 3."
+}

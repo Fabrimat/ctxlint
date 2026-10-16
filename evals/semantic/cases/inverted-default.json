@@ -1,0 +1,20 @@
+{
+  "id": "inverted-default",
+  "category": "near-miss",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/cache.md",
+    "path": ["Cache"],
+    "body": "Response caching is enabled by default. Set `cache: false` to turn it off for a single call.\n"
+  },
+  "files": [
+    {
+      "path": "src/cache.ts",
+      "content": "export interface FetchOptions {\n  cache?: boolean;\n  ttlMs?: number;\n}\n\nconst store = new Map<string, { value: unknown; expires: number }>();\n\nexport async function cachedFetch(\n  key: string,\n  load: () => Promise<unknown>,\n  { cache = false, ttlMs = 60_000 }: FetchOptions = {},\n): Promise<unknown> {\n  if (cache) {\n    const hit = store.get(key);\n    if (hit && hit.expires > Date.now()) return hit.value;\n  }\n  const value = await load();\n  if (cache) store.set(key, { value, expires: Date.now() + ttlMs });\n  return value;\n}\n\nexport function clearCache(): void {\n  store.clear();\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "Default flipped: cache is off unless cache: true is passed."
+}

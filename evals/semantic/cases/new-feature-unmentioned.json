@@ -1,0 +1,20 @@
+{
+  "id": "new-feature-unmentioned",
+  "category": "no-drift-absence",
+  "adversarial": true,
+  "label": "consistent",
+  "section": {
+    "file": "docs/storage.md",
+    "path": ["Storage", "Saving"],
+    "body": "`save(key, value)` writes the value as JSON to the data directory, one file per key.\n"
+  },
+  "files": [
+    {
+      "path": "src/storage.ts",
+      "content": "import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs';\nimport { join } from 'node:path';\n\nconst dataDir = process.env['DATA_DIR'] ?? 'data';\n\nexport function save(key: string, value: unknown): void {\n  mkdirSync(dataDir, { recursive: true });\n  writeFileSync(join(dataDir, key + '.json'), JSON.stringify(value));\n}\n\nexport function load(key: string): unknown {\n  const file = join(dataDir, key + '.json');\n  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : undefined;\n}\n\n/** New: lists every stored key. */\nexport function keys(): string[] {\n  if (!existsSync(dataDir)) return [];\n  return readdirSync(dataDir)\n    .filter((f) => f.endsWith('.json'))\n    .map((f) => f.slice(0, -'.json'.length));\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": "--- a/src/storage.ts\n+++ b/src/storage.ts\n@@ -15,0 +16,6 @@\n+/** New: lists every stored key. */\n+export function keys(): string[] {\n+  if (!existsSync(dataDir)) return [];\n+  return readdirSync(dataDir)\n+    .filter((f) => f.endsWith('.json'))\n+    .map((f) => f.slice(0, -'.json'.length));\n+}\n",
+  "note": "keys() is new and undocumented in this section; absence of documentation is not drift."
+}

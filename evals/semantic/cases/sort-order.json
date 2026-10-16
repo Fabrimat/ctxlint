@@ -1,0 +1,20 @@
+{
+  "id": "sort-order",
+  "category": "ordinary",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/api.md",
+    "path": ["API", "List posts"],
+    "body": "`GET /posts` returns posts sorted by `createdAt`, oldest first. Use `?limit=` to cap the number of results (default 20).\n"
+  },
+  "files": [
+    {
+      "path": "src/posts.ts",
+      "content": "export interface Post {\n  id: number;\n  title: string;\n  createdAt: number;\n}\n\nconst posts: Post[] = [];\n\nexport function addPost(title: string): Post {\n  const post = { id: posts.length + 1, title, createdAt: Date.now() };\n  posts.push(post);\n  return post;\n}\n\nexport function listPosts(limit = 20): Post[] {\n  return [...posts].sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);\n}\n\nexport function chunk<T>(items: readonly T[], size: number): T[][] {\n  const out: T[][] = [];\n  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));\n  return out;\n}\n\nexport function clamp(value: number, min: number, max: number): number {\n  return Math.min(max, Math.max(min, value));\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "Newest first in code, oldest first in the doc."
+}

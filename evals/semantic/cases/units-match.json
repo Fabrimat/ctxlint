@@ -1,0 +1,20 @@
+{
+  "id": "units-match",
+  "category": "ordinary",
+  "adversarial": false,
+  "label": "consistent",
+  "section": {
+    "file": "docs/client.md",
+    "path": ["Client", "Timeouts"],
+    "body": "`timeoutMs` is in milliseconds and defaults to 10000. Setting it to `0` disables the timeout.\n"
+  },
+  "files": [
+    {
+      "path": "src/client2.ts",
+      "content": "export interface Options {\n  timeoutMs?: number;\n}\n\nexport async function get(url: string, { timeoutMs = 10_000 }: Options = {}): Promise<Response> {\n  if (timeoutMs === 0) return fetch(url);\n  const controller = new AbortController();\n  const timer = setTimeout(() => controller.abort(), timeoutMs);\n  try {\n    return await fetch(url, { signal: controller.signal });\n  } finally {\n    clearTimeout(timer);\n  }\n}\n\nexport function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number) {\n  let timer: ReturnType<typeof setTimeout> | undefined;\n  return (...args: A): void => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), ms);\n  };\n}\n\nexport function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {\n  const out = {} as Pick<T, K>;\n  for (const k of keys) out[k] = obj[k];\n  return out;\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "Unit, default and zero behaviour match."
+}

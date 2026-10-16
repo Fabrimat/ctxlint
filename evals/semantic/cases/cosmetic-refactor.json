@@ -1,0 +1,20 @@
+{
+  "id": "cosmetic-refactor",
+  "category": "no-drift-refactor",
+  "adversarial": true,
+  "label": "consistent",
+  "section": {
+    "file": "docs/pricing.md",
+    "path": ["Pricing", "Discounts"],
+    "body": "Orders of 10 items or more get 5% off; orders of 50 items or more get 15% off. Discounts do not stack and never apply to shipping.\n"
+  },
+  "files": [
+    {
+      "path": "src/pricing.ts",
+      "content": "export interface Order {\n  items: number;\n  subtotal: number;\n  shipping: number;\n}\n\nfunction discountRate(count: number): number {\n  if (count >= 50) return 0.15;\n  if (count >= 10) return 0.05;\n  return 0;\n}\n\nexport function total(order: Order): number {\n  const rate = discountRate(order.items);\n  const discounted = order.subtotal * (1 - rate);\n  return Math.round((discounted + order.shipping) * 100) / 100;\n}\n\nexport function chunk<T>(items: readonly T[], size: number): T[][] {\n  const out: T[][] = [];\n  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));\n  return out;\n}\n\nexport function clamp(value: number, min: number, max: number): number {\n  return Math.min(max, Math.max(min, value));\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": "--- a/src/pricing.ts\n+++ b/src/pricing.ts\n@@ -1,18 +1,17 @@\n-export function total(o: Order): number {\n-  let r = 0;\n-  if (o.items >= 10) r = 0.05;\n-  if (o.items >= 50) r = 0.15;\n-  const d = o.subtotal - o.subtotal * r;\n-  return Math.round((d + o.shipping) * 100) / 100;\n-}\n+function discountRate(count: number): number {\n+  if (count >= 50) return 0.15;\n+  if (count >= 10) return 0.05;\n+  return 0;\n+}\n+\n+export function total(order: Order): number {\n+  const rate = discountRate(order.items);\n+  const discounted = order.subtotal * (1 - rate);\n+  return Math.round((discounted + order.shipping) * 100) / 100;\n+}\n",
+  "note": "The diff renames locals and extracts a helper; behaviour is identical and matches the doc."
+}

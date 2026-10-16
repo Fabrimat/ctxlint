@@ -1,0 +1,20 @@
+{
+  "id": "version-date-mention",
+  "category": "no-drift-version",
+  "adversarial": true,
+  "label": "consistent",
+  "section": {
+    "file": "docs/changelog-notes.md",
+    "path": ["Hashing"],
+    "body": "Since v2.0 (released March 2023) passwords are hashed with scrypt. Hashes are stored as `salt:hash` in hex.\n"
+  },
+  "files": [
+    {
+      "path": "src/passwords.ts",
+      "content": "import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';\n\nconst VERSION = '3.4.1';\n\nexport function hashPassword(password: string): string {\n  const salt = randomBytes(16);\n  const hash = scryptSync(password, salt, 64);\n  return salt.toString('hex') + ':' + hash.toString('hex');\n}\n\nexport function verifyPassword(password: string, stored: string): boolean {\n  const [saltHex, hashHex] = stored.split(':');\n  if (!saltHex || !hashHex) return false;\n  const expected = Buffer.from(hashHex, 'hex');\n  const actual = scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length);\n  return timingSafeEqual(actual, expected);\n}\n\nexport const info = { version: VERSION };\n\nexport function chunk<T>(items: readonly T[], size: number): T[][] {\n  const out: T[][] = [];\n  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));\n  return out;\n}\n\nexport function clamp(value: number, min: number, max: number): number {\n  return Math.min(max, Math.max(min, value));\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "The v2.0 and date are history, not a claim about current behaviour; the hashing claims match."
+}

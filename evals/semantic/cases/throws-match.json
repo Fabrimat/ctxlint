@@ -1,0 +1,20 @@
+{
+  "id": "throws-match",
+  "category": "ordinary",
+  "adversarial": false,
+  "label": "consistent",
+  "section": {
+    "file": "docs/users.md",
+    "path": ["Users", "getUser"],
+    "body": "`getUser(id)` throws a `NotFoundError` if there is no such user. It never returns `null`.\n"
+  },
+  "files": [
+    {
+      "path": "src/accounts.ts",
+      "content": "export class NotFoundError extends Error {\n  constructor(id: string) {\n    super('no user ' + id);\n    this.name = 'NotFoundError';\n  }\n}\n\nconst accounts = new Map<string, { id: string; name: string }>();\n\nexport function getUser(id: string): { id: string; name: string } {\n  const user = accounts.get(id);\n  if (!user) throw new NotFoundError(id);\n  return user;\n}\n\nexport function hasUser(id: string): boolean {\n  return accounts.has(id);\n}\n\nexport function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number) {\n  let timer: ReturnType<typeof setTimeout> | undefined;\n  return (...args: A): void => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), ms);\n  };\n}\n\nexport function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {\n  const out = {} as Pick<T, K>;\n  for (const k of keys) out[k] = obj[k];\n  return out;\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "Throws on a missing user, as documented."
+}

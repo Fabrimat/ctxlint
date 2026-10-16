@@ -1,0 +1,20 @@
+{
+  "id": "paraphrase",
+  "category": "no-drift-paraphrase",
+  "adversarial": true,
+  "label": "consistent",
+  "section": {
+    "file": "docs/queue.md",
+    "path": ["Queue", "Ordering"],
+    "body": "Jobs that share a priority run in the order they arrived. A job with a higher priority number jumps ahead of everything with a lower one.\n"
+  },
+  "files": [
+    {
+      "path": "src/queue.ts",
+      "content": "interface Entry<T> {\n  value: T;\n  priority: number;\n  seq: number;\n}\n\nexport class PriorityQueue<T> {\n  private entries: Entry<T>[] = [];\n  private counter = 0;\n\n  push(value: T, priority = 0): void {\n    this.entries.push({ value, priority, seq: this.counter++ });\n    this.entries.sort((a, b) => b.priority - a.priority || a.seq - b.seq);\n  }\n\n  shift(): T | undefined {\n    return this.entries.shift()?.value;\n  }\n\n  get size(): number {\n    return this.entries.length;\n  }\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "FIFO within a priority and higher number first: the doc says the same in other words."
+}

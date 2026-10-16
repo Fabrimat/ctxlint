@@ -1,0 +1,20 @@
+{
+  "id": "throws-vs-null",
+  "category": "near-miss",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/users.md",
+    "path": ["Users", "findUser"],
+    "body": "`findUser(id)` throws a `NotFoundError` when no user has that id, so callers never have to handle `null`.\n"
+  },
+  "files": [
+    {
+      "path": "src/users.ts",
+      "content": "export interface User {\n  id: string;\n  name: string;\n  email: string;\n}\n\nexport class NotFoundError extends Error {}\n\nconst users = new Map<string, User>();\n\nexport function addUser(user: User): void {\n  if (users.has(user.id)) throw new Error('duplicate id ' + user.id);\n  users.set(user.id, user);\n}\n\nexport function findUser(id: string): User | null {\n  return users.get(id) ?? null;\n}\n\nexport function requireEmail(id: string): string {\n  const user = findUser(id);\n  if (!user) throw new NotFoundError(id);\n  return user.email;\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "findUser returns null; only requireEmail throws."
+}

@@ -1,0 +1,20 @@
+{
+  "id": "cli-flags-match",
+  "category": "ordinary",
+  "adversarial": false,
+  "label": "consistent",
+  "section": {
+    "file": "docs/cli.md",
+    "path": ["CLI", "Flags"],
+    "body": "`build` accepts `--minify` and `--sourcemap`. `--out-dir` sets the output directory (default `dist`).\n"
+  },
+  "files": [
+    {
+      "path": "src/cli.ts",
+      "content": "import { parseArgs } from 'node:util';\nimport { build } from './build.js';\n\nconst { values } = parseArgs({\n  options: {\n    minify: { type: 'boolean', default: false },\n    sourcemap: { type: 'boolean', default: false },\n    'out-dir': { type: 'string', default: 'dist' },\n  },\n  strict: true,\n});\n\nawait build({\n  minify: values.minify,\n  sourcemap: values.sourcemap,\n  outDir: values['out-dir'],\n});\n\nexport function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number) {\n  let timer: ReturnType<typeof setTimeout> | undefined;\n  return (...args: A): void => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), ms);\n  };\n}\n\nexport function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {\n  const out = {} as Pick<T, K>;\n  for (const k of keys) out[k] = obj[k];\n  return out;\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "Flags and default match."
+}

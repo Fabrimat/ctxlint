@@ -1,0 +1,20 @@
+{
+  "id": "retries-match",
+  "category": "ordinary",
+  "adversarial": false,
+  "label": "consistent",
+  "section": {
+    "file": "docs/http.md",
+    "path": ["HTTP", "Retries"],
+    "body": "Failed requests are retried up to 3 times with a fixed delay of 500 ms. Only 5xx responses are retried.\n"
+  },
+  "files": [
+    {
+      "path": "src/fetcher.ts",
+      "content": "const MAX_RETRIES = 3;\nconst DELAY_MS = 500;\n\nconst wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));\n\nexport async function fetchWithRetry(url: string): Promise<Response> {\n  let res = await fetch(url);\n  for (let i = 0; i < MAX_RETRIES && res.status >= 500; i++) {\n    await wait(DELAY_MS);\n    res = await fetch(url);\n  }\n  return res;\n}\n\nexport function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number) {\n  let timer: ReturnType<typeof setTimeout> | undefined;\n  return (...args: A): void => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), ms);\n  };\n}\n\nexport function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {\n  const out = {} as Pick<T, K>;\n  for (const k of keys) out[k] = obj[k];\n  return out;\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "Count, delay and condition all match."
+}

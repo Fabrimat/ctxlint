@@ -1,0 +1,20 @@
+{
+  "id": "todo-will-change",
+  "category": "no-drift-todo",
+  "adversarial": true,
+  "label": "consistent",
+  "section": {
+    "file": "docs/uploads.md",
+    "path": ["Uploads", "Size limit"],
+    "body": "Uploads larger than 5 MB are rejected with a `413` status.\n"
+  },
+  "files": [
+    {
+      "path": "src/upload.ts",
+      "content": "// TODO: raise the limit to 20 MB once the storage migration is done.\n// This will change in the next release.\nconst MAX_UPLOAD_BYTES = 5 * 1024 * 1024;\n\nexport interface UploadResult {\n  status: number;\n  message: string;\n}\n\nexport function checkUpload(size: number, type: string): UploadResult {\n  if (size > MAX_UPLOAD_BYTES) return { status: 413, message: 'file too large' };\n  if (!type.startsWith('image/')) return { status: 415, message: 'unsupported type' };\n  return { status: 200, message: 'ok' };\n}\n\nexport function chunk<T>(items: readonly T[], size: number): T[][] {\n  const out: T[][] = [];\n  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));\n  return out;\n}\n\nexport function clamp(value: number, min: number, max: number): number {\n  return Math.min(max, Math.max(min, value));\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "The limit is still 5 MB; a TODO about a future change is not drift."
+}

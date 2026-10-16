@@ -1,0 +1,20 @@
+{
+  "id": "log-retention",
+  "category": "ordinary",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/logging.md",
+    "path": ["Logging", "Rotation"],
+    "body": "Log files are rotated daily and the 7 most recent files are kept; older ones are deleted.\n"
+  },
+  "files": [
+    {
+      "path": "src/log-rotate.ts",
+      "content": "import { readdirSync, renameSync, rmSync, existsSync } from 'node:fs';\nimport { join } from 'node:path';\n\nconst KEEP = 5;\n\nfunction stamp(d: Date): string {\n  return d.toISOString().slice(0, 10);\n}\n\nexport function rotate(dir: string, now = new Date()): void {\n  const current = join(dir, 'app.log');\n  if (existsSync(current)) renameSync(current, join(dir, 'app-' + stamp(now) + '.log'));\n  const old = readdirSync(dir)\n    .filter((f) => /^app-\\d{4}-\\d{2}-\\d{2}\\.log$/.test(f))\n    .sort()\n    .reverse();\n  for (const f of old.slice(KEEP)) rmSync(join(dir, f));\n}\n\nexport function chunk<T>(items: readonly T[], size: number): T[][] {\n  const out: T[][] = [];\n  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));\n  return out;\n}\n\nexport function clamp(value: number, min: number, max: number): number {\n  return Math.min(max, Math.max(min, value));\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "Keeps 5 files, the doc says 7."
+}

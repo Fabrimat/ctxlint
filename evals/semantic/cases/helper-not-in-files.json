@@ -1,0 +1,20 @@
+{
+  "id": "helper-not-in-files",
+  "category": "no-drift-unverifiable",
+  "adversarial": true,
+  "label": "consistent",
+  "section": {
+    "file": "docs/email.md",
+    "path": ["Email", "Validation"],
+    "body": "Addresses are validated before sending: malformed addresses and addresses on a disposable-email domain are rejected with `InvalidRecipient`.\n"
+  },
+  "files": [
+    {
+      "path": "src/mailer.ts",
+      "content": "import { assertDeliverable } from './recipients.js';\nimport { transport } from './transport.js';\n\nexport class InvalidRecipient extends Error {}\n\nexport interface Message {\n  to: string;\n  subject: string;\n  text: string;\n}\n\nexport async function send(message: Message): Promise<void> {\n  try {\n    assertDeliverable(message.to);\n  } catch (err) {\n    throw new InvalidRecipient(err instanceof Error ? err.message : String(err));\n  }\n  await transport.deliver({\n    to: message.to,\n    subject: message.subject,\n    body: message.text,\n  });\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "The rules live in recipients.ts, which is not provided. The code is compatible with the doc; the right answer is unsure (counts as not-drift)."
+}

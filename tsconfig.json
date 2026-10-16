@@ -14,8 +14,9 @@
     "skipLibCheck": true,
     "declaration": true,
     "sourceMap": true,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["src", "test", "bench"],
+  "include": ["src", "test", "bench", "evals"],
   "exclude": ["test/fixtures"]
 }

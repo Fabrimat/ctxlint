@@ -1,0 +1,20 @@
+{
+  "id": "removed-cli-flag",
+  "category": "near-miss",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/cli.md",
+    "path": ["CLI", "Flags"],
+    "body": "`build` accepts `--watch` to rebuild on change, `--minify` to shrink the output and `--sourcemap` to emit source maps.\n"
+  },
+  "files": [
+    {
+      "path": "src/cli.ts",
+      "content": "import { parseArgs } from 'node:util';\nimport { build } from './build.js';\n\nconst { values } = parseArgs({\n  options: {\n    minify: { type: 'boolean', default: false },\n    sourcemap: { type: 'boolean', default: false },\n    outDir: { type: 'string', default: 'dist' },\n  },\n  strict: true,\n});\n\nasync function main(): Promise<void> {\n  const result = await build({\n    minify: values.minify,\n    sourcemap: values.sourcemap,\n    outDir: values.outDir,\n  });\n  console.log('built ' + result.files + ' files');\n}\n\nmain().catch((err) => {\n  console.error(err);\n  process.exitCode = 1;\n});\n",
+      "changed": true
+    }
+  ],
+  "diff": "--- a/src/cli.ts\n+++ b/src/cli.ts\n@@ -5,7 +5,6 @@\n const { values } = parseArgs({\n   options: {\n-    watch: { type: 'boolean', default: false },\n     minify: { type: 'boolean', default: false },\n",
+  "note": "--watch was removed; strict parsing now rejects it."
+}

@@ -1,0 +1,20 @@
+{
+  "id": "default-port",
+  "category": "near-miss",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "README.md",
+    "path": ["Running locally"],
+    "body": "Start the dev server with `pnpm dev` and open http://localhost:3000. Set `PORT` to use a different port.\n"
+  },
+  "files": [
+    {
+      "path": "src/dev-server.ts",
+      "content": "import { createServer } from 'node:http';\nimport { readFile } from 'node:fs/promises';\nimport { join } from 'node:path';\n\nconst DEFAULT_PORT = 8080;\nconst root = join(process.cwd(), 'public');\n\nconst server = createServer(async (req, res) => {\n  const url = req.url === '/' ? '/index.html' : (req.url ?? '/');\n  try {\n    const body = await readFile(join(root, url));\n    res.writeHead(200);\n    res.end(body);\n  } catch {\n    res.writeHead(404);\n    res.end('not found');\n  }\n});\n\nconst port = Number(process.env['PORT'] ?? DEFAULT_PORT);\nserver.listen(port, () => {\n  console.log('listening on http://localhost:' + port);\n});\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "Default port is 8080, the doc says 3000."
+}

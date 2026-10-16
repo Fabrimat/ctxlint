@@ -1,0 +1,20 @@
+{
+  "id": "misleading-comment",
+  "category": "no-drift-comment",
+  "adversarial": true,
+  "label": "consistent",
+  "section": {
+    "file": "docs/dates.md",
+    "path": ["Dates", "parseDate"],
+    "body": "`parseDate(text)` accepts ISO 8601 dates (`2024-03-09`) and returns a UTC midnight `Date`. Anything else returns `null`.\n"
+  },
+  "files": [
+    {
+      "path": "src/dates.ts",
+      "content": "const ISO_DATE = /^(\\d{4})-(\\d{2})-(\\d{2})$/;\n\n/**\n * Parses a date. Accepts many formats and throws on invalid input.\n * (This comment is stale: the function below is stricter and never throws.)\n */\nexport function parseDate(text: string): Date | null {\n  const m = ISO_DATE.exec(text.trim());\n  if (!m) return null;\n  const [, y, mo, d] = m;\n  const date = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));\n  return Number.isNaN(date.getTime()) ? null : date;\n}\n\nexport function formatDate(date: Date): string {\n  return date.toISOString().slice(0, 10);\n}\n\nexport function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number) {\n  let timer: ReturnType<typeof setTimeout> | undefined;\n  return (...args: A): void => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), ms);\n  };\n}\n\nexport function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {\n  const out = {} as Pick<T, K>;\n  for (const k of keys) out[k] = obj[k];\n  return out;\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "The comment contradicts the code, but the doc matches the code. The code is the source of truth."
+}

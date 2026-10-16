@@ -1,0 +1,20 @@
+{
+  "id": "timeout-units",
+  "category": "near-miss",
+  "adversarial": false,
+  "label": "drift",
+  "section": {
+    "file": "docs/client.md",
+    "path": ["Client", "Timeouts"],
+    "body": "Pass `timeout` in milliseconds. The default is `30000` (30 seconds). A request that takes longer is aborted with a `TimeoutError`.\n"
+  },
+  "files": [
+    {
+      "path": "src/client.ts",
+      "content": "export interface ClientOptions {\n  baseUrl: string;\n  /** Request timeout in seconds. */\n  timeout?: number;\n}\n\nexport class TimeoutError extends Error {\n  override name = 'TimeoutError';\n}\n\nexport class Client {\n  private readonly baseUrl: string;\n  private readonly timeoutMs: number;\n\n  constructor(opts: ClientOptions) {\n    this.baseUrl = opts.baseUrl.replace(/\\/+$/, '');\n    this.timeoutMs = (opts.timeout ?? 30) * 1000;\n  }\n\n  async get(path: string): Promise<unknown> {\n    const controller = new AbortController();\n    const timer = setTimeout(() => controller.abort(), this.timeoutMs);\n    try {\n      const res = await fetch(this.baseUrl + path, { signal: controller.signal });\n      return await res.json();\n    } catch (err) {\n      if (controller.signal.aborted) throw new TimeoutError('request timed out');\n      throw err;\n    } finally {\n      clearTimeout(timer);\n    }\n  }\n}\n",
+      "changed": true
+    }
+  ],
+  "diff": null,
+  "note": "The option is in seconds (default 30), the doc says milliseconds with 30000."
+}
