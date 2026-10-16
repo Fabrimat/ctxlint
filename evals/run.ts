@@ -62,15 +62,21 @@ const hasKey =
     : Boolean(process.env['ANTHROPIC_API_KEY'] || process.env['ANTHROPIC_AUTH_TOKEN']);
 const dryRun = values['dry-run'] || !hasKey;
 
-const toInput = (c: EvalCase): SectionInput => ({
-  file: c.section.file,
-  path: c.section.path,
-  startLine: 1,
-  endLine: c.section.body.split('\n').length,
-  body: c.section.body,
-  files: c.files,
-  diff: c.diff,
-});
+// Production section bodies start at the heading line, so eval bodies do too.
+const toInput = (c: EvalCase): SectionInput => {
+  const title = c.section.path.at(-1);
+  const heading = title === undefined ? '' : `${'#'.repeat(c.section.path.length)} ${title}\n`;
+  const body = heading + c.section.body;
+  return {
+    file: c.section.file,
+    path: c.section.path,
+    startLine: 1,
+    endLine: body.split('\n').length,
+    body,
+    files: c.files,
+    diff: c.diff,
+  };
+};
 
 if (dryRun) {
   if (!values['dry-run']) console.log('No API key in the environment: dry run, no calls made.\n');
