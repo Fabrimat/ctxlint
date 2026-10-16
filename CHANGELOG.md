@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.0]
+
+First public release.
+
 ### Added
 
 - Markdown parser that extracts path, script and command claims from inline code, links, shell fences and (opt-in) prose, with `ctxtruth-ignore` and `ctxtruth-disable`/`ctxtruth-enable` markers.
@@ -27,3 +31,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Text and JSON reports with per-file freshness scores.
 - `ctxtruth check` CLI with `--format`, `--config`, `--root`, `--fail-on`, `--verbose` and `--no-color`, and exit codes 0/1/2.
 - Programmatic API: `check`, `defineConfig`, `formatReport` and the report types.
+- Plugin API for custom checks (`ctxtruth/plugin`), loaded from config `plugins`, and `ignoreRegions`: see `docs/plugins.md`.
+- `--untrusted`: never imports config or plugin code from the repository, also on `blame` and `history`. The GitHub Action enables it by default on `pull_request_target`.
+- Opt-in semantic drift check (`--llm`, `--llm-scope`, `--fix`): a model judges sections about changed code within a budget, with cost tracking, Anthropic and OpenAI providers, keys from the environment only, and proposed fixes that are never written to the docs.
+- Versioned JSON Schemas for the report, `blame` and `history` output (`ctxtruth/schema/*.json`).
+- Evals that measure the semantic check.
+- npm publishing with provenance (`release` workflow) and GitHub Marketplace metadata for the Action.
