@@ -11,7 +11,7 @@ Code moves on, the docs do not, and the agent confidently runs scripts that were
 ## Status
 
 Early development (v0.x). Six deterministic checks are available: paths, scripts, commands, symbols, snippets and versions.
-CI integrations and LLM-assisted checks are on the [roadmap](#roadmap).
+An opt-in, model-judged semantic check (`--llm`) covers what static analysis cannot verify.
 The output format and configuration may still change before 1.0.
 
 ## Install and quick start
@@ -190,6 +190,12 @@ ctxtruth check [paths...] [options]
 | `--untrusted`       | Never import code from the repository: a `ctxtruth.config.{ts,mts,mjs,js}` is skipped (an explicit one is an error) and config `plugins` are ignored. Also on `blame` and `history`. |
 | `--verbose`         | Also list claims that were `unknown`, with the reason.                                                                                                                               |
 | `--no-color`        | Disable colour. Colour is also off when not a TTY, with `NO_COLOR`, or in JSON.                                                                                                      |
+| `--llm`             | Also run the model-judged semantic check (see [Semantic drift](#semantic-drift-opt-in)).                                                                                             |
+| `--llm-scope <s>`   | `changed` (default: sections about code changed since `--base`) or `all`.                                                                                                            |
+| `--max-cost <usd>`  | Budget for model calls, or `unlimited`. Default `1.00`; calls that could exceed it are skipped.                                                                                      |
+| `--fix`             | Ask a model for a proposed edit to each semantic finding (implies `--llm`). Nothing is written to the docs.                                                                          |
+| `--patch <file>`    | Write the proposed edits as a unified diff, validated with `git apply --check` (implies `--fix`).                                                                                    |
+| `--llm-dump <dir>`  | Debugging: write every prompt and response to this directory. Off by default.                                                                                                        |
 
 `FORCE_COLOR` (anything but `0`) forces colour on.
 
@@ -241,6 +247,15 @@ const { report } = await check({ root: process.cwd() });
 console.log(formatReport(report, 'text', { color: false, verbose: false }));
 ```
 
+### Semantic drift (opt-in)
+
+`--llm` asks a model whether a doc section still describes the code it refers to. Only sections whose claims resolve to code changed since `--base` are sent (or every linked section with `--llm-scope all`), together with those files and their diff; nothing is truncated silently, and oversized input is reported as `unknown`.
+
+- **Providers:** Anthropic (default: `claude-haiku-5-5` to judge, `claude-opus-5-5` for `--fix`) or OpenAI, set in the `llm` config block. Install `@anthropic-ai/sdk` or `openai`; keys come only from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, never from config. Without a key every selected section is `unknown` and the exit code is unaffected.
+- **Cost:** every report shows calls, tokens, cost and latency. Before each call the worst case is reserved against `--max-cost`; a call that could exceed it is skipped.
+- **Labelled as such:** findings are marked model-judged and kept apart from verified ones in every format. The quoted sentence must exist in the section, model text is sanitised, and proposed edits must stay inside the section without adding links, headings, HTML or code blocks.
+- **Never applied:** `--fix` only proposes; `--patch` writes a diff file you review and apply yourself.
+
 ## Machine-readable output
 
 `check --format json`, `blame --format json` and `history --format json|jsonl` follow the JSON Schemas in [`schema/`](schema) (shipped in the npm package, also exported as zod schemas: `reportSchema`, `blameSchema`, `historySchema`, `historyEpisodeSchema`).
@@ -252,9 +267,9 @@ console.log(formatReport(report, 'text', { color: false, verbose: false }));
 
 ## Design principles
 
-- **Deterministic first.** Every check in this release is plain static analysis: same repository, same result, no network.
+- **Deterministic first.** The six built-in checks are plain static analysis: same repository, same result, no network.
 - **Precision over recall.** A false alarm costs more trust than a missed one. Ambiguous claims are `unknown`, never findings.
-- **LLMs only where they add value, and opt-in.** Planned: semantic checks for claims that cannot be verified mechanically, behind an explicit flag with cost tracking. Nothing in this release calls a model.
+- **LLMs only where they add value, and opt-in.** The semantic check runs only with `--llm`, only on sections about changed code, within a budget, and its findings are labelled as model-judged. Invalid model output is `unknown`, never a pass.
 - **Read-only.** It never edits your files; suggestions are printed, not applied.
 - **Honest numbers.** Every run reports how many claims were verified, failed or unknown, and a freshness score per file.
 
@@ -274,8 +289,8 @@ Not run yet: the paid run needs approval.
 - **M2 (done):** symbols, snippets and versions checks.
 - **M3 (done):** GitHub Action, SARIF output, reporting only findings a pull request introduces, `--changed-only`.
 - **M4 (done):** history engine: `ctxtruth blame` to find the commit that made a claim stale, `ctxtruth history`, and the DriftBench dataset.
-- **M4.5 (current):** plugin API for custom checks, `--untrusted`, `ignoreRegions`, and versioned JSON Schemas.
-- **M5:** opt-in LLM checks with cost tracking, and evals to measure them.
+- **M4.5 (done):** plugin API for custom checks, `--untrusted`, `ignoreRegions`, and versioned JSON Schemas.
+- **M5 (current):** opt-in semantic drift check (`--llm`) with cost tracking and a budget, proposed fixes as patches, and evals to measure it.
 - **M6:** a study of documentation drift on real repositories.
 
 ## Contributing
