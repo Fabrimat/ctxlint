@@ -63,7 +63,8 @@ export async function loadConfig(
   }
   if (path === null) return { config: configSchema.parse({}), path, warnings };
 
-  const parsed = configSchema.safeParse((await readRaw(path)) ?? {});
+  const raw: unknown = (await readRaw(path)) ?? {};
+  const parsed = configSchema.safeParse(raw);
   if (!parsed.success) {
     throw new ConfigError(`Invalid config ${path}:\n${z.prettifyError(parsed.error)}`);
   }
@@ -71,6 +72,12 @@ export async function loadConfig(
   if (untrusted && config.plugins.length > 0) {
     warnings.push(`--untrusted: ignoring \`plugins\` in ${path}`);
     config.plugins = [];
+  }
+  // The llm block decides what a run may spend (prices, budget, models, caps): an untrusted
+  // repository must not set it. `rules.semantic` stays: it only changes a finding's severity.
+  if (untrusted && typeof raw === 'object' && raw !== null && 'llm' in raw) {
+    warnings.push(`--untrusted: ignoring \`llm\` in ${path}`);
+    config.llm = configSchema.parse({}).llm;
   }
   return { config, path, warnings };
 }

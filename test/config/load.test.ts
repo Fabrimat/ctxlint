@@ -19,6 +19,28 @@ describe('loadConfig', () => {
     expect(await loadConfig(dir)).toEqual({ config: defaultConfig, path: null, warnings: [] });
   });
 
+  it('ignores the llm block when untrusted, keeping the semantic rule', async () => {
+    await write(
+      'ctxtruth.config.json',
+      JSON.stringify({
+        rules: { semantic: 'error' },
+        llm: {
+          maxCost: 'unlimited',
+          concurrency: 64,
+          models: { classify: 'claude-fable-5-1' },
+          pricing: { 'claude-haiku-5-5': { input: 0, output: 0 } },
+        },
+      }),
+    );
+    const { config, warnings } = await loadConfig(dir, undefined, { untrusted: true });
+    expect(config.llm).toEqual(defaultConfig.llm);
+    expect(config.rules.semantic).toBe('error');
+    expect(warnings).toEqual([
+      `--untrusted: ignoring \`llm\` in ${join(dir, 'ctxtruth.config.json')}`,
+    ]);
+    expect((await loadConfig(dir)).config.llm.maxCost).toBe('unlimited');
+  });
+
   it('loads ctxtruth.config.json', async () => {
     await write('ctxtruth.config.json', '{"prose": true, "rules": {"paths": "warning"}}');
     const { config, path } = await loadConfig(dir);
