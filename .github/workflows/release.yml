@@ -11,11 +11,10 @@ on:
         default: true
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
-  release:
+  verify:
     runs-on: ubuntu-latest
     env:
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
@@ -25,14 +24,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-          registry-url: https://registry.npmjs.org
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
-
       - name: Verify the tag matches package.json
         if: env.DRY_RUN != 'true'
         env:
@@ -40,27 +31,62 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           version=$(node -p "require('./package.json').version")
-          if [ "$REF_TYPE" != "tag" ] || [ "$REF_NAME" != "v$version" ]; then
-            echo "::error::Ref '$REF_NAME' ($REF_TYPE) is not the tag v$version from package.json."
+          if [ "$REF_TYPE" != "tag" ] || ! [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || [ "$REF_NAME" != "v$version" ]; then
+            echo "::error::Ref '$REF_NAME' ($REF_TYPE) is not a valid release tag equal to v$version from package.json."
             exit 1
           fi
-
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
       - name: Check the package contents
         if: env.DRY_RUN == 'true'
         run: npm pack --dry-run
 
+  publish:
+    needs: verify
+    if: github.event_name != 'workflow_dispatch' || !inputs.dry-run
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: npm audit signatures
+      - run: pnpm build
+
       - name: Publish to npm
-        if: env.DRY_RUN != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "ctxtruth@$version" version 2>/dev/null)" ]; then
+            echo "ctxtruth@$version is already on npm, skipping the publish."
+            exit 0
+          fi
+          tag=latest
+          if [[ "$version" == *-* ]]; then tag=next; fi
+          npm publish --provenance --access public --tag "$tag"
 
       - name: Create the GitHub release
-        if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG exists, skipping."
+            exit 0
+          fi
           version="${TAG#v}"
           awk -v v="$version" '
             /^## \[/ { if (on) exit; on = index($0, "## [" v "]") == 1; next }
@@ -70,14 +96,25 @@ jobs:
             echo "::error::No CHANGELOG section for $version."
             exit 1
           fi
-          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          flags=()
+          if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
 
       - name: Move the major tag
-        if: env.DRY_RUN != 'true'
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          major="${TAG#v}"
-          major="v${major%%.*}"
-          git tag -f "$major" HEAD
-          git push -f origin "refs/tags/$major"
+          version="${TAG#v}"
+          if [[ "$version" == *-* ]]; then
+            echo "Prerelease, not moving the major tag."
+            exit 0
+          fi
+          major="${version%%.*}"
+          # Never move the major tag backwards: skip if a higher stable version of this major is tagged.
+          highest=$(git tag --list "v$major.*.*" --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          if [ "$highest" != "$TAG" ]; then
+            echo "$highest is higher than $TAG, not moving v$major."
+            exit 0
+          fi
+          git tag -f "v$major" HEAD
+          git push -f origin "refs/tags/v$major"
