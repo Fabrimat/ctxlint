@@ -2,16 +2,28 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { defaultConfig } from '../dist/config/index.js';
-import { Budget, estimateTokens } from '../dist/llm/budget.js';
-import { DEFAULT_PRICING, costUsd } from '../dist/llm/pricing.js';
-import { createProvider, type LlmProvider } from '../dist/llm/provider.js';
-import { buildPrompt, judgeSection, type SectionInput } from '../dist/llm/semantic.js';
+import type { defaultConfig as DefaultConfig } from '../src/config/index.js';
+import type * as BudgetMod from '../src/llm/budget.js';
+import type * as PricingMod from '../src/llm/pricing.js';
+import type * as ProviderMod from '../src/llm/provider.js';
+import type { LlmProvider } from '../src/llm/provider.js';
+import type * as SemanticMod from '../src/llm/semantic.js';
+import type { SectionInput } from '../src/llm/semantic.js';
 import { loadCases, type EvalCase } from './cases.ts';
 import { computeMetrics, markdownTable, type JudgedRecord } from './metrics.ts';
 
-// ponytail: keep equal to the output cap judgeSection requests; only the dry-run estimate uses it.
-const MAX_TOKENS = 1024;
+// Types come from src so typecheck needs no build; the runtime modules are the built ones.
+const load = <T>(path: string): Promise<T> => import(path) as Promise<T>;
+const { defaultConfig } = await load<{ defaultConfig: typeof DefaultConfig }>(
+  '../dist/config/index.js',
+);
+const { Budget, estimateTokens } = await load<typeof BudgetMod>('../dist/llm/budget.js');
+const { DEFAULT_PRICING, costUsd } = await load<typeof PricingMod>('../dist/llm/pricing.js');
+const { createProvider } = await load<typeof ProviderMod>('../dist/llm/provider.js');
+const { buildPrompt, judgeSection } = await load<typeof SemanticMod>('../dist/llm/semantic.js');
+
+// ponytail: keep equal to JUDGE_MAX_TOKENS in src/llm/semantic.ts (not exported); only the dry-run estimate uses it.
+const MAX_TOKENS = 1500;
 const CONCURRENCY = 4;
 
 const { values } = parseArgs({
