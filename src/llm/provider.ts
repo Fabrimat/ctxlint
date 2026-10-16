@@ -78,7 +78,7 @@ export async function createProvider(llm: LlmConfig, env: NodeJS.ProcessEnv): Pr
       const [sdk, helpers] = await Promise.all([import('openai'), import('openai/helpers/zod')]);
       const { OpenAiProvider } = await import('./openai.js');
       return new OpenAiProvider(
-        new sdk.default({ apiKey, timeout: llm.timeoutMs, maxRetries: 2 }),
+        new sdk.default({ apiKey, timeout: llm.timeoutMs, maxRetries: 0 }),
         helpers.zodTextFormat,
         sdk,
       );
@@ -94,7 +94,7 @@ export async function createProvider(llm: LlmConfig, env: NodeJS.ProcessEnv): Pr
     const { AnthropicProvider } = await import('./anthropic.js');
     const apiKey = env['ANTHROPIC_API_KEY'] || null;
     const authToken = env['ANTHROPIC_AUTH_TOKEN'] || null;
-    const client = new sdk.default({ apiKey, authToken, timeout: llm.timeoutMs, maxRetries: 2 });
+    const client = new sdk.default({ apiKey, authToken, timeout: llm.timeoutMs, maxRetries: 0 });
     const keyed = apiKey !== null || authToken !== null;
     return new AnthropicProvider(client, helpers.zodOutputFormat, sdk, keyed);
   } catch (err) {

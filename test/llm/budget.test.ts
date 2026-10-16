@@ -207,6 +207,12 @@ describe('budget leak', () => {
     expect(budget.totals()).toMatchObject({ costUsd: 0, costEstimated: false });
   });
 
+  it('counts a call that never reached the API as skipped, not as a call', async () => {
+    const budget = new Budget(1, DEFAULT_PRICING);
+    await callWithBudget(budget, new FakeProvider(() => invalid(false)), req());
+    expect(budget.totals()).toMatchObject({ calls: 0, failedCalls: 0, skipped: 1 });
+  });
+
   it('never exceeds the budget under 20 concurrent invalid calls', async () => {
     const max = 0.1;
     const budget = new Budget(max, DEFAULT_PRICING);

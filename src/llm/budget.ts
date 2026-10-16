@@ -133,6 +133,8 @@ export async function callWithBudget<T>(
   }
   const res = await provider.complete(req);
   budget.settle(reservation, res.usage, res.ok || res.sent !== false);
-  budget.record(res);
+  // A call that never reached the API (no key, no SDK) is skipped, not a call.
+  if (!res.ok && res.sent === false) budget.skip();
+  else budget.record(res);
   return res;
 }
