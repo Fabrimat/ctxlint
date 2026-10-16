@@ -1,5 +1,6 @@
 import type { CheckResult, Finding, Report } from '../types.js';
 import { reportedResults } from './build.js';
+import { llmLine } from './llm.js';
 import type { FormatOptions } from './index.js';
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -63,5 +64,6 @@ export function formatAgent(report: Report, opts: FormatOptions): string {
       `To fix: edit the docs at the positions above ${how}; re-run \`ctxtruth check\` to confirm.`,
     );
   }
+  if (report.llm) out.push(llmLine(report.llm));
   return `${out.join('\n')}\n`;
 }

@@ -1,5 +1,6 @@
 import type { Finding, Report } from '../types.js';
 import { reportedResults } from './build.js';
+import { llmLine } from './llm.js';
 import type { FormatOptions } from './index.js';
 
 /** The action finds and updates its pull request comment by this marker. */
@@ -104,6 +105,7 @@ export function formatMarkdown(report: Report, opts: FormatOptions): string {
   const out = [MARKER, '### ctxtruth', '', summary(report, all), ''];
   const muted = mutedLine(report);
   if (muted) out.push(muted, '');
+  if (report.llm) out.push(`<sub>${llmLine(report.llm)}</sub>`, '');
 
   if (listedCode.length > 0) {
     out.push('#### Made false by code changes', '', ...tables(listedCode, opts));
