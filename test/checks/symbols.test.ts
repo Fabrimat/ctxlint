@@ -190,8 +190,20 @@ describe('symbols check: root not found', () => {
     });
   });
 
-  it('fails a case-insensitive match', async () => {
-    expect(finding(await run('loadConfig', STRONG))?.suggestion).toBe('LoadConfig');
+  it('fails a same-case case-insensitive match, never one across camel and Pascal', async () => {
+    expect(finding(await run('createaccount', STRONG))?.suggestion).toBe('createAccount');
+    expect((await run('loadConfig', STRONG)).status).toBe('unknown');
+    const src = { 'a.ts': 'export function runtimeError() {}' };
+    expect((await run('RuntimeError', WEAK, 'warning', src)).status).toBe('unknown');
+  });
+
+  it('is unknown for a missing member of a lowercase one-word root', async () => {
+    expect(await run('cfg.missing', WEAK)).toMatchObject({
+      status: 'unknown',
+      reason: 'may name another value',
+    });
+    expect((await run('cfg.missing', { ...WEAK, call: 'true' })).status).toBe('unknown');
+    expect((await run('Shape.missing', WEAK)).status).toBe('fail');
   });
 
   it('does not count truncations or kind changes as renames', async () => {
@@ -201,6 +213,7 @@ describe('symbols check: root not found', () => {
         'export function formatDateTime() {}',
         'export class VmForksPoolWorker {}',
         'export class Data {}',
+        'export class WalkResult {}',
       ].join('\n'),
     };
     for (const [v, meta] of [
@@ -209,9 +222,17 @@ describe('symbols check: root not found', () => {
       ['vmForks', STRONG],
       ['TData', WEAK],
       ['DataSet', WEAK],
+      ['TaskResult', WEAK],
     ] as const) {
       expect((await run(v, meta, 'warning', src)).status, v).toBe('unknown');
     }
+  });
+
+  it('does not take a rename from a test file', async () => {
+    const src = { 'test/helpers.ts': 'export function registeredCodec() {}' };
+    expect((await run('registerCodec', STRONG, 'warning', src)).status).toBe('unknown');
+    const shipped = { 'src/codec.ts': 'export function registeredCodec() {}' };
+    expect((await run('registerCodec', STRONG, 'warning', shipped)).status).toBe('fail');
   });
 
   it('is unknown when two renames are equally close', async () => {

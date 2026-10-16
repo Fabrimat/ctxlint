@@ -1,5 +1,5 @@
 import { buildSymbolIndex, type SymbolDecl, type SymbolIndex } from '../index/symbols.js';
-import { closest, distance } from '../util/distance.js';
+import { closest, distance, isRename } from '../util/distance.js';
 import type { Check, CheckResult, Claim, Severity } from '../types.js';
 import { fail, pass, unknown } from './result.js';
 
@@ -54,34 +54,36 @@ function confident(name: string, candidates: Iterable<string>): string | undefin
 }
 
 /**
- * Whether `name` looks like a rename of a declared root: case-insensitive equal, or for names of
- * 6+ chars a unique nearest candidate within edit distance 2 and 80% similarity. Never a pure
- * prefix or suffix (`cleanupUnusedCatalogs` -> `cleanup`, `formatDate` -> `formatDateTime`), never
- * across camel/Pascal case (`vmForks` -> `VmForksPoolWorker`).
+ * Whether `name` looks like a rename of a declared root: the same name in another case
+ * (`formatTimeStamp` -> `formatTimestamp`), or a unique typo-sized rename (`isRename`). Never a
+ * prefix or suffix truncation (`cleanupUnusedCatalogs` -> `cleanup`), never across camel and
+ * Pascal case: `RuntimeError` vs `runtimeError` or `vmForks` vs `VmForksPoolWorker` are other kinds.
  */
 function renamed(name: string, candidates: Iterable<string>): string | undefined {
-  const all = [...candidates].filter((c) => c !== name);
+  const upper = (s: string): boolean => /^[A-Z]/.test(s);
+  const all = [...candidates].filter((c) => c !== name && upper(c) === upper(name));
   const lower = name.toLowerCase();
   const same = all.filter((c) => c.toLowerCase() === lower);
   if (same.length > 0) return same.length === 1 ? same[0] : undefined;
-  if (name.length < 6) return undefined;
-  const upper = (s: string): boolean => /^[A-Z]/.test(s);
-  let best: string[] = [];
-  let bestDistance = 3;
-  for (const c of all) {
+  const near = all.filter((c) => {
     const l = c.toLowerCase();
-    if (upper(c) !== upper(name) || l.startsWith(lower) || lower.startsWith(l)) continue;
-    if (l.endsWith(lower) || lower.endsWith(l)) continue;
-    const d = distance(name, c);
-    if (d > 2 || 1 - d / Math.max(name.length, c.length) < 0.8) continue;
-    if (d < bestDistance) [best, bestDistance] = [[c], d];
-    else if (d === bestDistance) best.push(c);
-  }
-  return best.length === 1 ? best[0] : undefined;
+    if (l.startsWith(lower) || lower.startsWith(l) || l.endsWith(lower) || lower.endsWith(l)) {
+      return false;
+    }
+    return isRename(name, c);
+  });
+  if (near.length < 2) return near[0];
+  // Equally close candidates: only a unique nearest one is a rename.
+  const d = near.map((c) => distance(name, c));
+  const best = Math.min(...d);
+  const top = near.filter((_, i) => d[i] === best);
+  return top.length === 1 ? top[0] : undefined;
 }
 
 /** `TData`, `TQueryKey`: a generic type parameter, declared by whatever signature uses it. */
 const TYPE_PARAM = /^T[A-Z]\w*$/;
+const TEST_FILE =
+  /(?:^|\/)(?:test|tests|__tests__|__mocks__|fixtures?)\/|\.(?:test|spec|test-d)\.[cm]?[jt]sx?$/;
 
 type MemberLookup = { found: boolean; unresolved?: 'inherited' | 'unindexed'; known: Set<string> };
 
@@ -126,6 +128,11 @@ function verify(claim: Claim, index: SymbolIndex, severity: Severity): CheckResu
       return unknown(claim, 'symbols', 'inherited member', files(decls));
     if (r.unresolved === 'unindexed')
       return unknown(claim, 'symbols', 'members not indexed', files(decls));
+    // A lowercase one-word root (`config.contract`, `methods.credentialTest`) often names another
+    // value than the declaration that happens to share its name.
+    if (claim.meta?.shape === 'weak' && /^[a-z]/.test(root)) {
+      return unknown(claim, 'symbols', 'may name another value', files(decls));
+    }
     const near = confident(member, r.known);
     return fail(
       claim,
@@ -149,7 +156,12 @@ function verify(claim: Claim, index: SymbolIndex, severity: Severity): CheckResu
       ? pass(claim, 'symbols', [where])
       : unknown(claim, 'symbols', 'members not indexed', [where]);
   }
-  const near = renamed(root, index.decls.keys());
+  // A test helper (`registeredCodec` in a test file) is no evidence of what the docs renamed.
+  const shipped = [...index.decls].filter(([, ds]) => ds.some((d) => !TEST_FILE.test(d.file)));
+  const near = renamed(
+    root,
+    shipped.map(([name]) => name),
+  );
   const call = claim.meta?.call === 'true';
   // Weak calls/chains (`path.join()`, `res.send()`) are usually variables or imports: never a root failure.
   const generic = claim.meta?.shape === 'weak' && (member !== undefined || call);

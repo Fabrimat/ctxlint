@@ -14,6 +14,9 @@ const IDENT = /^[A-Za-z_][A-Za-z0-9_$]*$/;
 const CAMEL = /^[a-z][a-z0-9]*(?:[A-Z][A-Za-z0-9]*)+$/;
 const PASCAL = /^[A-Z][A-Za-z0-9]*$/;
 
+/** `createX`, `getY`, `FooService`: an illustrative name. */
+const PLACEHOLDER = /[a-z][A-Z]$|(?:^|[a-z])(?:Foo|Baz|Qux)(?=[A-Z]|$)/;
+
 const HUMP = /[A-Z][a-z0-9]|[A-Z]+(?![a-z])/g;
 
 /** Number of words in a camelCase / PascalCase name (`createUser` = 2, `toJSON` = 2, `React` = 1). */
@@ -55,6 +58,9 @@ export function inlineSymbol(code: string): PathParts | null {
   const segments = head.split(/[.#]/);
   const [root = '', ...rest] = segments;
   if (!segments.every((s) => IDENT.test(s)) || RESERVED.has(root) || root.length < 2) return null;
+  // `CONTRACT.MARKER_MISSING`: an error code or constant path, not a declaration.
+  if (segments.every((s) => /^[A-Z0-9_]+$/.test(s))) return null;
+  if (PLACEHOLDER.test(root)) return null;
   if (rest.length > 0) {
     const last = rest[rest.length - 1] ?? '';
     // `e.g`, `i.e`: abbreviations have short non-final segments.

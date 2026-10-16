@@ -28,9 +28,11 @@ describe('inlineSymbol: accepted', () => {
     ['XMLHttpRequest.open()', 'XMLHttpRequest.open', CALL],
     ['toJSON.x()', 'toJSON.x', CALL],
     ['res.send()', 'res.send', { ...CALL, ...WEAK }],
-    ['Foo.bar', 'Foo.bar', WEAK],
+    ['Cfg.bar', 'Cfg.bar', WEAK],
     ['fs.readFile', 'fs.readFile', WEAK],
     ['foo.bar.baz()', 'foo.bar.baz', { ...CALL, ...WEAK }],
+    ['BarChart', 'BarChart', WEAK],
+    ['Errors.NOT_FOUND', 'Errors.NOT_FOUND', WEAK],
   ])('%s', (code, value, meta) => {
     expect(inlineSymbol(code)).toEqual({ value, meta: meta ?? {} });
   });
@@ -83,6 +85,13 @@ describe('inlineSymbol: rejected', () => {
     'a+b',
     'if(x)',
     'x()',
+    'CONTRACT.MARKER_MISSING',
+    'PLAN.HASH_MISMATCH',
+    'createX()',
+    'Foo.bar',
+    'getY',
+    'FooService',
+    'useFoo()',
     '',
   ])('%s', (code) => {
     expect(inlineSymbol(code)).toBeNull();

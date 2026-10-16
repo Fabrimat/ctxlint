@@ -25,10 +25,10 @@ const custom = (check: string, matched: string, value: string, extra = {}) => ({
 
 describe('plugin matchers', () => {
   it('take inline code before paths and symbols; the first check in order wins', () => {
-    expect(parse('See `src/ids/a.ts`, `src/x.ts` and `Foo.bar`.')).toMatchObject([
+    expect(parse('See `src/ids/a.ts`, `src/x.ts` and `Cfg.bar`.')).toMatchObject([
       custom('a/ids', 'inline-code', 'src/ids/a.ts'),
       custom('b/cli', 'inline-code', 'src/x.ts'),
-      { kind: 'symbol', value: 'Foo.bar' },
+      { kind: 'symbol', value: 'Cfg.bar' },
     ]);
   });
 
