@@ -160,10 +160,27 @@ describe('symbols check: root not found', () => {
     });
   });
 
-  it('fails a weak claim only with a confident match', async () => {
-    const r = await run('createAcount', WEAK);
+  it('fails a bare PascalCase claim only with a confident match', async () => {
+    const r = await run('UserServise', WEAK);
     expect(r.status).toBe('fail');
-    expect(finding(r)?.suggestion).toBe('createAccount');
+    expect(finding(r)?.suggestion).toBe('UserService');
+  });
+
+  it('never fails a bare camelCase name: it may be a key, option or variable', async () => {
+    for (const v of ['createAcount', 'loadConfig']) {
+      expect(await run(v, WEAK)).toMatchObject({
+        status: 'unknown',
+        reason: 'not found in the codebase',
+      });
+    }
+  });
+
+  it('is unknown for generic type parameters', async () => {
+    for (const v of ['TData', 'TQueryKey', 'TData.foo']) {
+      expect(await run(v, WEAK)).toMatchObject({ status: 'unknown', reason: 'type parameter' });
+    }
+    const src = { 'a.ts': 'export interface TData { a: 1 }' };
+    expect((await run('TData', WEAK, 'warning', src)).status).toBe('pass');
   });
 
   it('is unknown for a weak claim without a match', async () => {
@@ -173,9 +190,33 @@ describe('symbols check: root not found', () => {
     });
   });
 
-  it('suggests case-insensitive and prefix matches', async () => {
-    expect(finding(await run('loadConfig', WEAK))?.suggestion).toBe('LoadConfig');
-    expect(finding(await run('formatDate', WEAK))?.suggestion).toBe('formatDateTime');
+  it('fails a case-insensitive match', async () => {
+    expect(finding(await run('loadConfig', STRONG))?.suggestion).toBe('LoadConfig');
+  });
+
+  it('does not count truncations or kind changes as renames', async () => {
+    const src = {
+      'a.ts': [
+        'export function cleanup() {}',
+        'export function formatDateTime() {}',
+        'export class VmForksPoolWorker {}',
+        'export class Data {}',
+      ].join('\n'),
+    };
+    for (const [v, meta] of [
+      ['cleanupUnusedCatalogs', STRONG],
+      ['formatDate', STRONG],
+      ['vmForks', STRONG],
+      ['TData', WEAK],
+      ['DataSet', WEAK],
+    ] as const) {
+      expect((await run(v, meta, 'warning', src)).status, v).toBe('unknown');
+    }
+  });
+
+  it('is unknown when two renames are equally close', async () => {
+    const src = { 'a.ts': 'export function createUser() {}\nexport function createUsed() {}' };
+    expect((await run('createUsex', STRONG, 'warning', src)).status).toBe('unknown');
   });
 
   it('uses the configured severity', async () => {

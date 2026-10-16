@@ -1,5 +1,5 @@
 import { buildSymbolIndex, type SymbolDecl, type SymbolIndex } from '../index/symbols.js';
-import { closest } from '../util/distance.js';
+import { closest, distance } from '../util/distance.js';
 import type { Check, CheckResult, Claim, Severity } from '../types.js';
 import { fail, pass, unknown } from './result.js';
 
@@ -31,8 +31,9 @@ const HOOK = /^use[A-Z]/;
 const AUGMENT = new Set(['interface', 'type', 'namespace']);
 
 /**
- * One closeness rule for names and members: case-insensitive equal, a unique prefix pair
- * (`formatDate` / `formatDateTime`), or a small edit distance (names of 5+ chars). Never the
+ * Closeness rule for member suggestions (the owner is known, so this is only a hint):
+ * case-insensitive equal, a unique prefix pair (`formatDate` / `formatDateTime`), or a small
+ * edit distance (names of 5+ chars). Never the
  * same name. A prefix match needs the suffix to start a new camel hump, or to be 3+ chars with
  * the shorter name covering 3/4 of the longer one.
  */
@@ -51,6 +52,36 @@ function confident(name: string, candidates: Iterable<string>): string | undefin
   if (prefixed.length === 1 && only !== undefined) return only;
   return name.length < 5 ? undefined : closest(name, all, Math.floor(name.length * 0.25));
 }
+
+/**
+ * Whether `name` looks like a rename of a declared root: case-insensitive equal, or for names of
+ * 6+ chars a unique nearest candidate within edit distance 2 and 80% similarity. Never a pure
+ * prefix or suffix (`cleanupUnusedCatalogs` -> `cleanup`, `formatDate` -> `formatDateTime`), never
+ * across camel/Pascal case (`vmForks` -> `VmForksPoolWorker`).
+ */
+function renamed(name: string, candidates: Iterable<string>): string | undefined {
+  const all = [...candidates].filter((c) => c !== name);
+  const lower = name.toLowerCase();
+  const same = all.filter((c) => c.toLowerCase() === lower);
+  if (same.length > 0) return same.length === 1 ? same[0] : undefined;
+  if (name.length < 6) return undefined;
+  const upper = (s: string): boolean => /^[A-Z]/.test(s);
+  let best: string[] = [];
+  let bestDistance = 3;
+  for (const c of all) {
+    const l = c.toLowerCase();
+    if (upper(c) !== upper(name) || l.startsWith(lower) || lower.startsWith(l)) continue;
+    if (l.endsWith(lower) || lower.endsWith(l)) continue;
+    const d = distance(name, c);
+    if (d > 2 || 1 - d / Math.max(name.length, c.length) < 0.8) continue;
+    if (d < bestDistance) [best, bestDistance] = [[c], d];
+    else if (d === bestDistance) best.push(c);
+  }
+  return best.length === 1 ? best[0] : undefined;
+}
+
+/** `TData`, `TQueryKey`: a generic type parameter, declared by whatever signature uses it. */
+const TYPE_PARAM = /^T[A-Z]\w*$/;
 
 type MemberLookup = { found: boolean; unresolved?: 'inherited' | 'unindexed'; known: Set<string> };
 
@@ -106,6 +137,7 @@ function verify(claim: Claim, index: SymbolIndex, severity: Severity): CheckResu
     );
   }
   if (GLOBALS.has(root)) return unknown(claim, 'symbols', 'global');
+  if (TYPE_PARAM.test(root)) return unknown(claim, 'symbols', 'type parameter');
   if (FRAMEWORK.has(root) || HOOK.test(root)) {
     return unknown(claim, 'symbols', 'framework or web API');
   }
@@ -117,11 +149,13 @@ function verify(claim: Claim, index: SymbolIndex, severity: Severity): CheckResu
       ? pass(claim, 'symbols', [where])
       : unknown(claim, 'symbols', 'members not indexed', [where]);
   }
-  const near = confident(root, index.decls.keys());
+  const near = renamed(root, index.decls.keys());
+  const call = claim.meta?.call === 'true';
   // Weak calls/chains (`path.join()`, `res.send()`) are usually variables or imports: never a root failure.
-  const generic =
-    claim.meta?.shape === 'weak' && (member !== undefined || claim.meta.call === 'true');
-  if (near === undefined || generic || index.skipped > 0) {
+  const generic = claim.meta?.shape === 'weak' && (member !== undefined || call);
+  // A bare camelCase name (`devDependencies`, `todoId`) is a config key, option or variable.
+  const bare = member === undefined && !call && !/^[A-Z]/.test(root);
+  if (near === undefined || generic || bare || index.skipped > 0) {
     return unknown(claim, 'symbols', 'not found in the codebase');
   }
   const [decl] = index.decls.get(near) ?? [];
