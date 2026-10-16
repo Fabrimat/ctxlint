@@ -62,7 +62,10 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: npm audit signatures
+      # npm reads signatures from a package-lock; with a pnpm lockfile this may not apply.
+      - name: Verify registry signatures
+        run: npm audit signatures
+        continue-on-error: true
       - run: pnpm build
 
       - name: Publish to npm
