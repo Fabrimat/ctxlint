@@ -82,6 +82,27 @@ For that event `untrusted` defaults to `true`, so ctxtruth reads only a JSON con
 `untrusted` covers ctxtruth only: a custom `command` (e.g. `node dist/cli.js`) runs whatever the checkout contains.
 On `pull_request_target` the action posts no comment and sets no default `base`: it compares only when you pass `base`.
 
+## Semantic drift (`--llm`)
+
+Pass `--llm` through `args` and give the step the provider key:
+
+<!-- ctxtruth-ignore -->
+
+```yaml
+- uses: Fabrimat/ctxtruth@main
+  with:
+    args: --llm --max-cost 0.50
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+On pull requests the action sets the base, so only sections about the changed code are judged.
+Model-judged findings are listed apart from verified ones and say which model judged them.
+Install the provider SDK (`@anthropic-ai/sdk` or `openai`) where ctxtruth runs; without it, or without a key, the run warns and the sections stay unknown.
+
+On `pull_request_target`, `--llm` sends content the pull request controls (docs and code) to the provider with your key, and the comment shows model text derived from it.
+With `untrusted` on, the repository's `llm` config block is ignored and the built-in defaults apply, so a pull request cannot raise the budget, change the prices or pick the models; only the action's `args` (`--max-cost`, `--llm-scope`) change them.
+
 ## SARIF
 
 With `sarif: true` the action writes a SARIF file and uploads it so findings show up as code scanning alerts.

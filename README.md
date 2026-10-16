@@ -252,7 +252,7 @@ console.log(formatReport(report, 'text', { color: false, verbose: false }));
 `--llm` asks a model whether a doc section still describes the code it refers to. Only sections whose claims resolve to code changed since `--base` are sent (or every linked section with `--llm-scope all`), together with those files and their diff; nothing is truncated silently, and oversized input is reported as `unknown`.
 
 - **Providers:** Anthropic (default: `claude-haiku-5-5` to judge, `claude-opus-5-5` for `--fix`) or OpenAI, set in the `llm` config block. Install `@anthropic-ai/sdk` or `openai`; keys come only from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, never from config. Without a key every selected section is `unknown` and the exit code is unaffected.
-- **Cost:** every report shows calls, tokens, cost and latency. Before each call the worst case is reserved against `--max-cost`; a call that could exceed it is skipped.
+- **Cost:** every report shows calls, tokens, cost and latency. Before each call the worst case is reserved against `--max-cost`; a call that could exceed it is skipped. Failed calls are not retried, so the ceiling holds.
 - **Labelled as such:** findings are marked model-judged and kept apart from verified ones in every format. The quoted sentence must exist in the section, model text is sanitised, and proposed edits must stay inside the section without adding links, headings, HTML or code blocks.
 - **Never applied:** `--fix` only proposes; `--patch` writes a diff file you review and apply yourself.
 
