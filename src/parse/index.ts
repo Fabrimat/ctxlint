@@ -44,7 +44,8 @@ const GENERATED =
   /\b(?:(?:auto-?)?generated|generates?|created by|written by|output of|build output)\b/i;
 // ponytail: one line of wording above a fence (or its first line) marks a counterexample.
 const COUNTEREXAMPLE =
-  /❌|✗|🚫|\b(?:wrong|bad|incorrect|avoid|anti-?pattern|don'?t|do not|never|before)\b/i;
+  /❌|✗|🚫|\b(?:wrong|bad|incorrect|avoid|anti-?pattern|don'?t|do not)\b|^\W*before\W*$/i;
+// ponytail: wording right next to the version; a bound said elsewhere in the sentence is missed.
 // A version stated as a bound or a past or other version, not the one the repo uses.
 const BOUND_BEFORE =
   /\b(?:as of|since|from|up from|before|until|prior to|older than|newer than|at least|introduced in|added in|deprecated in|removed in|starting (?:with|from|in))\s*[`(]*$/i;

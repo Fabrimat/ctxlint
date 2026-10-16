@@ -15,6 +15,7 @@ const CAMEL = /^[a-z][a-z0-9]*(?:[A-Z][A-Za-z0-9]*)+$/;
 const PASCAL = /^[A-Z][A-Za-z0-9]*$/;
 
 /** `createX`, `getY`, `FooService`: an illustrative name. */
+// ponytail: shape only; a real one-letter-suffix name such as `getX` is never checked.
 const PLACEHOLDER = /[a-z][A-Z]$|(?:^|[a-z])(?:Foo|Baz|Qux)(?=[A-Z]|$)/;
 
 const HUMP = /[A-Z][a-z0-9]|[A-Z]+(?![a-z])/g;

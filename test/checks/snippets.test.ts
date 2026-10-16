@@ -307,9 +307,21 @@ describe('snippets check', () => {
       "// Don't do this",
       'a(1, 2);',
       '```',
+      '',
+      'Before committing, run this check:',
+      '',
+      '```ts',
+      'a(1);',
+      '```',
+      '',
+      '**Before:**',
+      '',
+      '```ts',
+      'a(1, 2);',
+      '```',
     ].join('\n');
     const metas = parseMarkdown(md, 'AGENTS.md').map((c) => c.meta?.counterexample);
-    expect(metas).toEqual(['true', undefined, 'true']);
+    expect(metas).toEqual(['true', undefined, 'true', undefined, 'true']);
     const [r] = await run({}, [snip('a(1);', { meta: { lang: 'ts', counterexample: 'true' } })]);
     expect(r).toMatchObject({ status: 'unknown', reason: 'shown as a counterexample' });
   });
