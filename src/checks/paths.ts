@@ -120,7 +120,8 @@ export const pathsCheck: Check = {
       const page = route ? cands.map((p) => `${p}.md`).find((p) => files.hasFile(p)) : undefined;
       if (page !== undefined) return pass(claim, 'paths', [page]);
       // In a site, `/x` is the site's URL root (public assets, generated pages), not the repo's.
-      if (route || (site !== undefined && claim.meta?.anchor === 'root')) {
+      // Outside any docs site an extensionless link is a broken repo link, as it would be on GitHub.
+      if (site !== undefined && (route || claim.meta?.anchor === 'root')) {
         return unknown(claim, 'paths', 'site route');
       }
       // A bare filename (`config.ts`) usually names a file by basename, wherever it lives.

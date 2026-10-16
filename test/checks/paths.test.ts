@@ -220,12 +220,15 @@ describe('paths check: site links and generated files', () => {
     expect(r?.resolvedFiles).toEqual(['docs/config/pool.md']);
   });
 
-  it('is unknown for an unresolved site route, anywhere', async () => {
+  it('fails an unresolved extensionless link outside any docs site', async () => {
+    expect(await run(link('site/gone', 'README.md'))).toMatchObject({ status: 'fail' });
+  });
+
+  it('is unknown for an unresolved site route under docs', async () => {
     for (const c of [
       link('config/gone', 'docs/guide/x.md', { anchor: 'root' }),
       link('logo.svg', 'docs/guide/x.md', { anchor: 'root' }),
       link('../guide/gone', 'docs/config/pool.md'),
-      link('site/gone', 'README.md'),
     ]) {
       expect(await run(c), c.value).toMatchObject({ status: 'unknown', reason: 'site route' });
     }
