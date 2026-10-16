@@ -42,6 +42,15 @@ const PACKAGE_MANAGER_COMMAND = /^(?:npm|pnpm|yarn|bun|npx)(?=\s|$)/;
 // ponytail: word test on the claim's line or paragraph; misses a "generated" said a paragraph away.
 const GENERATED =
   /\b(?:(?:auto-?)?generated|generates?|created by|written by|output of|build output)\b/i;
+// ponytail: one line of wording above a fence (or its first line) marks a counterexample.
+const COUNTEREXAMPLE =
+  /❌|✗|🚫|\b(?:wrong|bad|incorrect|avoid|anti-?pattern|don'?t|do not|never|before)\b/i;
+// A version stated as a bound or a past or other version, not the one the repo uses.
+const BOUND_BEFORE =
+  /\b(?:as of|since|from|up from|before|until|prior to|older than|newer than|at least|introduced in|added in|deprecated in|removed in|starting (?:with|from|in))\s*[`(]*$/i;
+const BOUND_AFTER = /^[`)]*\s*(?:\+|or (?:later|newer|above|higher)|and (?:later|newer|above|up))/i;
+const COMPAT =
+  /\b(?:do(?:es)? not support|doesn'?t support|don'?t support|incompatible|not compatible)\b/i;
 const FRONTMATTER = /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
 /** Empties a leading YAML frontmatter block but keeps its line breaks, so line numbers hold. */
@@ -86,6 +95,14 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
     // A file the docs say is generated or created may legitimately be missing from the checkout.
     if (kind === 'path' && (GENERATED.test(lines[pos.line - 1] ?? '') || GENERATED.test(item))) {
       meta = { ...meta, generated: 'true' };
+    }
+    if (kind === 'version' && source === 'inline-code') {
+      const line = lines[pos.line - 1] ?? '';
+      const before = line.slice(0, pos.col - 1);
+      const after = line.slice(pos.col - 1 + value.length);
+      if (BOUND_BEFORE.test(before) || BOUND_AFTER.test(after) || COMPAT.test(item || line)) {
+        meta = { ...meta, bound: 'true' };
+      }
     }
     claims.push({
       kind,
@@ -150,9 +167,13 @@ export function parseMarkdown(text: string, file: string, opts: ParseOptions = {
   }
 
   function snippet(node: Code, lang: string, first: number): void {
+    // The text just above the fence, and its first line: "❌ Wrong", "Don't", "Before".
+    const above = lines.slice(Math.max(0, first - 4), first - 1).filter((l) => l.trim() !== '');
+    const said = [above.at(-1) ?? '', node.value.split(/\r?\n/)[0] ?? ''];
     add('snippet', node.value, blockPos(node, first), 'fence', {
       lang,
       ...(node.meta ? { info: node.meta } : {}),
+      ...(said.some((l) => COUNTEREXAMPLE.test(l)) ? { counterexample: 'true' } : {}),
     });
   }
 

@@ -84,6 +84,8 @@ async function verifyIn(
 async function verify(claim: Claim, ctx: CheckContext, cache: ReadCache): Promise<CheckResult> {
   const { pkg, range } = claim.meta ?? {};
   if (!pkg || !range) return unknown(claim, 'versions', 'malformed version claim');
+  // "as of `wrangler@4.87`", "`x@2.7.2` does not support Vitest 5": not the version in use.
+  if (claim.meta?.bound === 'true') return unknown(claim, 'versions', 'a bound or another version');
   const owners = declarers(pkg, docDir(claim.file), ctx.index.packages.all);
   // ponytail: installed-only (hoisted transitive) packages are not repo dependencies, so unknown.
   if (owners.length === 0) return unknown(claim, 'versions', 'not a dependency');

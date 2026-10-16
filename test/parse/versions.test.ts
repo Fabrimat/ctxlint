@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseMarkdown } from '../../src/parse/index.js';
 import { inlineVersion } from '../../src/parse/versions.js';
 
 describe('inlineVersion', () => {
@@ -33,5 +34,33 @@ describe('inlineVersion', () => {
     'a/b@1',
   ])('rejects %s', (code) => {
     expect(inlineVersion(code)).toBeNull();
+  });
+});
+
+describe('version mentions stated as a bound', () => {
+  const bound = (md: string) =>
+    parseMarkdown(md, 'AGENTS.md')
+      .filter((c) => c.kind === 'version')
+      .map((c) => [c.value, c.meta?.bound ?? '']);
+
+  it('marks "as of", "since", "or later" and compatibility notes', () => {
+    expect(
+      bound(
+        [
+          'Both work as of `wrangler@4.87`.',
+          'Requires `vite@6` or later.',
+          '`@analogjs/vitest-angular@2.7.2` and Angular build\ntooling do not support Vitest 5.',
+          'Upgrade from `zod@3` to `zod@4`.',
+          'Validated with `zod@4`.',
+        ].join('\n\n'),
+      ),
+    ).toEqual([
+      ['wrangler@4.87', 'true'],
+      ['vite@6', 'true'],
+      ['@analogjs/vitest-angular@2.7.2', 'true'],
+      ['zod@3', 'true'],
+      ['zod@4', ''],
+      ['zod@4', ''],
+    ]);
   });
 });

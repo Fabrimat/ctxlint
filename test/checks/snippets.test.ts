@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { snippetsCheck } from '../../src/checks/snippets.js';
+import { parseMarkdown } from '../../src/parse/index.js';
 import type { Claim } from '../../src/types.js';
 import { makeClaim, makeCtx, makeIndex } from '../helpers/repo.js';
 import { makeTmpRepo } from '../helpers/tmp.js';
@@ -242,12 +243,75 @@ describe('snippets check', () => {
   });
 
   it('handles tsx snippets', async () => {
-    const [ok, bad] = await run({}, [
+    const [ok, bad] = await run({ 'src/format.ts': FORMAT }, [
       snip('const el = <div className="a">hi</div>;\nel;', { meta: { lang: 'tsx' } }),
-      snip('const f = (n: number) => <b>{n}</b>;\nf(1, 2);', { meta: { lang: 'tsx' } }),
+      snip(
+        "import { formatTimestamp } from './src/format';\nconst el = <b>{formatTimestamp(1, 2)}</b>;",
+        { meta: { lang: 'tsx' } },
+      ),
     ]);
     expect(ok?.status).toBe('pass');
     expect(bad?.status).toBe('fail');
+  });
+
+  it('judges members and arguments only against the repository code', async () => {
+    const files = { 'tsconfig.json': TSCONFIG, 'src/format.ts': FORMAT };
+    const results = await run(files, [
+      snip('function getUser() {}\ngetUser(1);'),
+      snip('const t = new EventTarget();\nt.value;'),
+      snip("class Dog { constructor(name: string) {} }\nnew Dog('a').name;"),
+    ]);
+    for (const r of results) {
+      expect(r).toMatchObject({
+        status: 'unknown',
+        reason: 'disagrees only with code outside the repository',
+      });
+    }
+  });
+
+  it('is unknown when undeclared names surround a drift diagnostic', async () => {
+    const [r] = await run({ 'tsconfig.json': TSCONFIG, 'src/format.ts': FORMAT }, [
+      snip("import { formatTimestamp } from './src/format';\nformatTimestamp(store, 2);"),
+    ]);
+    expect(r).toMatchObject({
+      status: 'unknown',
+      reason: 'uses names the snippet does not declare',
+    });
+  });
+
+  it('treats a parent-relative module without a named dir as illustrative', async () => {
+    const [r] = await run({ 'tsconfig.json': TSCONFIG, 'docs/a.md': '' }, [
+      snip("import { useUser } from '../dashboard';", { file: 'docs/a.md' }),
+    ]);
+    expect(r).toMatchObject({
+      status: 'unknown',
+      reason: 'imports an illustrative relative module',
+    });
+  });
+
+  it('marks and skips a snippet shown as a counterexample', async () => {
+    const md = [
+      '**❌ WRONG: importing from the barrel**',
+      '',
+      '```ts',
+      "import { a } from '@repo/x';",
+      '```',
+      '',
+      'Use this:',
+      '',
+      '```ts',
+      "import { b } from './b';",
+      '```',
+      '',
+      '```ts',
+      "// Don't do this",
+      'a(1, 2);',
+      '```',
+    ].join('\n');
+    const metas = parseMarkdown(md, 'AGENTS.md').map((c) => c.meta?.counterexample);
+    expect(metas).toEqual(['true', undefined, 'true']);
+    const [r] = await run({}, [snip('a(1);', { meta: { lang: 'ts', counterexample: 'true' } })]);
+    expect(r).toMatchObject({ status: 'unknown', reason: 'shown as a counterexample' });
   });
 
   it('reports the count of further drift diagnostics', async () => {

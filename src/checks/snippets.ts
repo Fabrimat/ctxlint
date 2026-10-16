@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import type { Diagnostic } from 'typescript';
+import type { Declaration, Diagnostic, Node, Program, SourceFile } from 'typescript';
 import { compilerOptions, findTsconfig, mappedPackages, virtualHost } from '../index/program.js';
 import type { TS } from '../index/program.js';
 import type { Check, CheckContext, CheckResult, Claim, FileIndex } from '../types.js';
@@ -10,6 +10,12 @@ const DRIFT_CODES = new Set([2305, 2724, 2614, 2339, 2551, 2554, 2555, 2345, 235
 const MISSING_MODULE = new Set([2307, 2792]);
 const MISSING_EXPORT = new Set([2305, 2724]);
 const CODE_EXT = /^(\.[cm]?[jt]sx?)?$/;
+/** Module-level drift: a missing module or export. */
+const MODULE_CODES = new Set([...MISSING_MODULE, ...MISSING_EXPORT, 2614]);
+/** Member, argument and object-literal drift: judged against the declaration it hits. */
+const OWNED = new Set([2339, 2551, 2554, 2555, 2345, 2353, 2561]);
+/** `Cannot find name`, with or without a suggestion. */
+const UNRESOLVED = new Set([2304, 2552, 2580, 2582]);
 
 const OPT_OUT = /\b(ignore|nocheck|ctxtruth-ignore)\b/;
 // ponytail: textual elision test (`...` before a closer/EOL, `/* ... */`, `// ...`); a real AST
@@ -26,6 +32,7 @@ interface Prepared {
 
 function skipReason(claim: Claim): string | undefined {
   if (OPT_OUT.test(claim.meta?.info ?? '')) return 'opted out';
+  if (claim.meta?.counterexample === 'true') return 'shown as a counterexample';
   return ELISION.test(claim.value) ? 'contains elision' : undefined;
 }
 
@@ -62,29 +69,84 @@ function drift(
   imports: string[],
   names: string[],
   workspace: string[],
-  where: { dir: string; files: FileIndex },
+  where: { dir: string; files: FileIndex; owned: (d: Diagnostic) => boolean },
 ): Diagnostic[] | string {
-  const { dir: base, files } = where;
+  const { dir: base, files, owned } = where;
   // `./module.js`, `./path/to/module`: illustrative unless its directory exists (`./src/gone.ts`).
   // Relative assets (`./app.css`) are bundler business.
   const relative = all.some((d) => {
     const spec = specOf(ts, d) ?? '';
     if (!MISSING_MODULE.has(d.code) || !RELATIVE.test(spec)) return false;
     const dir = posix.normalize(posix.join(base, posix.dirname(spec)));
-    const real = posix.dirname(spec) !== '.' && files.hasDir(dir === '.' ? '' : dir);
+    const named = posix
+      .dirname(spec)
+      .split('/')
+      .some((s) => s !== '.' && s !== '..');
+    const real = named && files.hasDir(dir === '.' ? '' : dir);
     return CODE_EXT.test(posix.extname(spec)) && !real;
   });
   if (relative) return 'imports an illustrative relative module';
   const kept = all.filter((d) => keep(ts, d, names));
-  if (!imports.some((s) => isWorkspaceName(s, workspace))) return kept;
+  // A wrong member or argument is drift only on a declaration of the repo's own code: the
+  // snippet's own illustrative declarations, the DOM and other libraries are not ours to judge.
+  let repo = kept.filter((d) => !OWNED.has(d.code) || owned(d));
+  if (kept.length > 0 && repo.length === 0)
+    return 'disagrees only with code outside the repository';
+  // Undeclared names (`Agent`, `store`) make the types around them guesses.
+  if (all.some((d) => UNRESOLVED.has(d.code))) {
+    const sure = repo.filter((d) => MODULE_CODES.has(d.code));
+    if (sure.length === 0 && repo.length > 0) return 'uses names the snippet does not declare';
+    repo = sure;
+  }
+  if (!imports.some((s) => isWorkspaceName(s, workspace))) return repo;
   // Workspace packages map to their sources, so declaration merging (chai's `expect().to`) and
   // build-time types are missing: only a missing export of a mapped module is sure.
-  const sure = kept.filter(
+  const sure = repo.filter(
     (d) => MISSING_EXPORT.has(d.code) && names.includes(specOf(ts, d) ?? ''),
   );
-  return sure.length === 0 && kept.length > 0
+  return sure.length === 0 && repo.length > 0
     ? 'imports a workspace package; its types may be incomplete'
     : sure;
+}
+
+/** The deepest node of `sf` that contains `pos`. */
+function nodeAt(sf: SourceFile, pos: number): Node {
+  let node: Node = sf;
+  for (;;) {
+    const child = node.getChildren(sf).find((c) => c.getStart(sf) <= pos && pos < c.getEnd());
+    if (child === undefined) return node;
+    node = child;
+  }
+}
+
+/** The declarations a member, call or object-literal diagnostic is checked against. */
+function targetDecls(ts: TS, program: Program, sf: SourceFile, d: Diagnostic): Declaration[] {
+  const checker = program.getTypeChecker();
+  const at = nodeAt(sf, d.start ?? 0);
+  const up = (test: (n: Node) => boolean): Node | undefined => {
+    for (let n: Node | undefined = at; n !== undefined; n = n.parent) if (test(n)) return n;
+    return undefined;
+  };
+  const ofType = (n: Node): Declaration[] => {
+    const type = checker.getTypeAtLocation(n);
+    return [...((type.getSymbol() ?? type.aliasSymbol)?.declarations ?? [])];
+  };
+  if (d.code === 2339 || d.code === 2551) {
+    const access = up(ts.isPropertyAccessExpression);
+    return access !== undefined && ts.isPropertyAccessExpression(access)
+      ? ofType(access.expression)
+      : [];
+  }
+  if (d.code === 2353 || d.code === 2561) {
+    const literal = up(ts.isObjectLiteralExpression);
+    if (literal === undefined || !ts.isObjectLiteralExpression(literal)) return [];
+    const type = checker.getContextualType(literal);
+    return [...((type?.getSymbol() ?? type?.aliasSymbol)?.declarations ?? [])];
+  }
+  const call = up((n) => ts.isCallExpression(n) || ts.isNewExpression(n));
+  if (call === undefined || !(ts.isCallExpression(call) || ts.isNewExpression(call))) return [];
+  const decl = checker.getResolvedSignature(call)?.getDeclaration();
+  return decl === undefined ? [] : [decl];
 }
 
 /** Repo files (outside node_modules) the snippet's imports resolve to. */
@@ -164,7 +226,8 @@ export const snippetsCheck: Check = {
 
     for (const [key, items] of groups) {
       const options = compilerOptions(ts, ctx.index, key === '' ? undefined : key);
-      const host = virtualHost(ts, options, ctx.index, new Map(items.map((p) => [p.path, p.text])));
+      const virtual = new Map(items.map((p) => [p.path, p.text]));
+      const host = virtualHost(ts, options, ctx.index, virtual);
       const program = ts.createProgram(
         items.map((p) => p.path),
         options,
@@ -181,6 +244,22 @@ export const snippetsCheck: Check = {
         const diags = drift(ts, all, imports, names, workspace, {
           dir: docDir(p.claim.file),
           files: ctx.index.files,
+          owned: (d) => {
+            const decls = targetDecls(ts, program, sf, d);
+            return (
+              decls.length > 0 &&
+              decls.every((decl) => {
+                const file = decl.getSourceFile();
+                const name = file.fileName.replaceAll('\\', '/');
+                return (
+                  !program.isSourceFileDefaultLibrary(file) &&
+                  !name.includes('/node_modules/') &&
+                  !virtual.has(name) &&
+                  name.toLowerCase().startsWith(`${root.toLowerCase()}/`)
+                );
+              })
+            );
+          },
         });
         if (typeof diags === 'string') {
           results.set(p.claim, unknown(p.claim, 'snippets', diags));

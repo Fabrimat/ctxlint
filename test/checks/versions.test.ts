@@ -175,3 +175,16 @@ describe('versions check: suggestion precision', () => {
     },
   );
 });
+
+describe('versions check: bounds', () => {
+  it('is unknown for a version stated as a bound or another version', async () => {
+    const claim: Claim = makeClaim({
+      kind: 'version',
+      value: 'zod@3',
+      meta: { pkg: 'zod', range: '3', bound: 'true' },
+    });
+    const index = makeIndex({ files: ['package.json'], packages: root({ zod: '^4.0.0' }) });
+    const [r] = await versionsCheck.run([claim], makeCtx(index));
+    expect(r).toMatchObject({ status: 'unknown', reason: 'a bound or another version' });
+  });
+});
