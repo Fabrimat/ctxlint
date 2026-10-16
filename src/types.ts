@@ -202,7 +202,7 @@ export interface Report {
   summary: {
     files: number;
     claims: number;
-    /** `pass`, `fail` and `freshness` count verified results only, never model-judged ones. */
+    /** Every count but `errors` and `warnings` leaves out the model-judged results. */
     pass: number;
     fail: number;
     unknown: number;

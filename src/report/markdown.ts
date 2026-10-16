@@ -110,8 +110,11 @@ function semanticTable(findings: Finding[], opts: FormatOptions): string[] {
       ? `[\`${pos}\`](${opts.linkBase}/${f.file}#L${f.line})`
       : `\`${pos}\``;
     const sev = f.severity === 'error' ? '🔴 error' : '🟡 warning';
-    const fix = f.proposedFix ? `<br>Proposed (unverified): ${cell(fixText(f.proposedFix))}` : '';
-    out.push(`| ${loc} | ${sev} | ${cell(driftText(f))}${fix} |`);
+    // Model text only inside code spans: no live links, images, HTML or mentions.
+    const fix = f.proposedFix
+      ? `<br>Proposed (unverified): ${pipes(code(fixText(f.proposedFix)))}`
+      : '';
+    out.push(`| ${loc} | ${sev} | ${pipes(code(driftText(f)))}${fix} |`);
   }
   out.push('');
   if (findings.length > listed.length) out.push(`…and ${findings.length - listed.length} more`, '');

@@ -41,7 +41,14 @@ function semanticPass(): CheckResult {
 describe('semantic findings in the reports', () => {
   it('leave freshness and the verified counts alone', () => {
     const r = report([pass(), drift(), semanticPass()]);
-    expect(r.summary).toMatchObject({ pass: 1, fail: 0, freshness: 1, warnings: 1 });
+    expect(r.summary).toMatchObject({
+      claims: 1,
+      pass: 1,
+      fail: 0,
+      unknown: 0,
+      freshness: 1,
+      warnings: 1,
+    });
     expect(r.files[0]?.freshness).toBe(1);
     expect(r.findings).toHaveLength(1);
   });
@@ -76,13 +83,24 @@ describe('semantic findings in the reports', () => {
     expect(out).not.toContain('AGENTS.md  freshness');
   });
 
-  it('markdown: a separate table, escaped through the cell helper', () => {
+  it('markdown: a separate table, model text inside code spans', () => {
     const out = formatReport(report([pass(), drift()]), 'markdown', opts);
     expect(out).toContain('#### Possible semantic drift (model-judged)');
     expect(out).toContain(
-      '| `AGENTS.md:6` | 🟡 warning | "port 3000 \\| &lt;b>": PORT is 8080 @‍team<br>Proposed (unverified): replace lines 6-6 with: Port 8080.⏎Second line. |',
+      '| `AGENTS.md:6` | 🟡 warning | `"port 3000 \\| <b>": PORT is 8080 @team`<br>Proposed (unverified): `replace lines 6-6 with: Port 8080.⏎Second line.` |',
     );
     expect(out).toContain('No documentation drift found');
+  });
+
+  it('markdown: injected links, images and backticks stay inert', () => {
+    const r = drift();
+    const f = r.finding as NonNullable<CheckResult['finding']>;
+    f.message = 'Possible drift: "a `b` c": see [x](http://evil) and ![](http://host/?q=)';
+    f.proposedFix = { startLine: 6, endLine: 6, replacement: '``` [y](http://evil)' };
+    const out = formatReport(report([r]), 'markdown', opts);
+    expect(out).toContain(
+      '| ``"a `b` c": see [x](http://evil) and ![](http://host/?q=)``<br>Proposed (unverified): ````replace lines 6-6 with: ``` [y](http://evil)```` |',
+    );
   });
 
   it('sarif: a model-judged rule and the proposed fix', () => {

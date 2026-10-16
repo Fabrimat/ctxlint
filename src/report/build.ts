@@ -67,10 +67,13 @@ export function buildReport(
     findings,
     summary: {
       files: files.length,
-      claims: results.length,
+      claims: results.filter((r) => !isSemantic(r)).length,
       pass,
       fail,
-      unknown: countStatus(results, 'unknown'),
+      unknown: countStatus(
+        results.filter((r) => !isSemantic(r)),
+        'unknown',
+      ),
       errors: findings.filter((f) => f.severity === 'error').length,
       warnings: findings.filter((f) => f.severity === 'warning').length,
       freshness: ratio(pass, fail),
