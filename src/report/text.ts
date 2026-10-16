@@ -1,6 +1,7 @@
 import { styleText } from 'node:util';
 import type { FileReport, Finding, Report } from '../types.js';
-import { isReported } from './build.js';
+import { driftText, fixText } from './agent.js';
+import { isReported, isSemantic, verified } from './build.js';
 import { llmLine } from './llm.js';
 
 type Style = Parameters<typeof styleText>[0];
@@ -35,6 +36,7 @@ function findingRow(f: Finding): Row {
 function fileRows(file: FileReport, verbose: boolean): Row[] {
   const rows: Row[] = [];
   for (const r of file.results) {
+    if (isSemantic(r)) continue;
     const { line, col, kind, value } = r.claim;
     if (isReported(r) && r.finding) {
       rows.push(findingRow(r.finding));
@@ -58,8 +60,7 @@ function formatFile(
   rows: Row[],
   paint: (s: string, style: Style) => string,
 ): string[] {
-  const pass = file.results.filter((r) => r.status === 'pass').length;
-  const fail = file.results.filter((r) => r.status === 'fail').length;
+  const { pass, fail } = verified(file.results);
   const out = [
     `${paint(file.file, 'bold')}  freshness ${percent(file.freshness)} (${pass}/${pass + fail})`,
   ];
@@ -108,7 +109,23 @@ export function formatText(report: Report, opts: { color: boolean; verbose: bool
     const rows = fileRows(file, opts.verbose);
     if (rows.length > 0) out.push(...formatFile(file, rows, paint));
   }
+  const semantic = report.files
+    .flatMap((f) => f.results)
+    .filter((r) => isSemantic(r) && isReported(r))
+    .flatMap((r) => (r.finding ? [r.finding] : []));
+  if (semantic.length > 0) {
+    out.push(paint('Possible semantic drift (model-judged)', 'bold'));
+    for (const f of semantic) {
+      const sev = paint(f.severity, f.severity === 'error' ? 'red' : 'yellow');
+      out.push(`  ${paint(`${f.file}:${f.line}`, 'dim')}  ${sev}  ${driftText(f)}`);
+      if (f.proposedFix) {
+        out.push(`    proposed (${f.model ?? 'model'}, unverified): ${fixText(f.proposedFix)}`);
+      }
+    }
+    out.push('');
+  }
   out.push(formatSummary(report.summary, paint));
+
   if (report.llm) out.push(llmLine(report.llm));
   return `${out.join('\n')}\n`;
 }

@@ -1,5 +1,6 @@
 import type { Finding, Report } from '../types.js';
-import { reportedResults } from './build.js';
+import { driftText, fixText, modelsOf } from './agent.js';
+import { isSemantic, reportedResults, verified } from './build.js';
 import { llmLine } from './llm.js';
 import type { FormatOptions } from './index.js';
 
@@ -92,9 +93,37 @@ function tables(findings: Finding[], opts: FormatOptions): string[] {
   return out;
 }
 
+/** Model-judged findings, apart from the verified ones. */
+function semanticTable(findings: Finding[], opts: FormatOptions): string[] {
+  const listed = findings.slice(0, MAX_LISTED);
+  const out = [
+    '#### Possible semantic drift (model-judged)',
+    '',
+    `<sub>Judged by ${cell(modelsOf(findings))}, not verified: confirm against the code before editing.</sub>`,
+    '',
+    '| Location | Severity | Possible drift |',
+    '| --- | --- | --- |',
+  ];
+  for (const f of listed) {
+    const pos = `${f.file}:${f.line}`;
+    const loc = opts.linkBase
+      ? `[\`${pos}\`](${opts.linkBase}/${f.file}#L${f.line})`
+      : `\`${pos}\``;
+    const sev = f.severity === 'error' ? '🔴 error' : '🟡 warning';
+    const fix = f.proposedFix ? `<br>Proposed (unverified): ${cell(fixText(f.proposedFix))}` : '';
+    out.push(`| ${loc} | ${sev} | ${cell(driftText(f))}${fix} |`);
+  }
+  out.push('');
+  if (findings.length > listed.length) out.push(`…and ${findings.length - listed.length} more`, '');
+  return out;
+}
+
 /** The pull request comment body. */
+
 export function formatMarkdown(report: Report, opts: FormatOptions): string {
-  const all = reportedResults(report).flatMap((r) => (r.finding ? [r.finding] : []));
+  const reported = reportedResults(report);
+  const all = reported.filter((r) => !isSemantic(r)).flatMap((r) => (r.finding ? [r.finding] : []));
+  const semantic = reported.filter(isSemantic).flatMap((r) => (r.finding ? [r.finding] : []));
   const compared = report.comparison !== undefined;
   const code = compared ? all.filter((f) => f.introducedBy === 'code') : [];
   const rest = compared ? all.filter((f) => f.introducedBy !== 'code') : all;
@@ -115,11 +144,11 @@ export function formatMarkdown(report: Report, opts: FormatOptions): string {
     out.push(...tables(listedRest, opts));
   }
   if (all.length > listed.length) out.push(`…and ${all.length - listed.length} more`, '');
+  if (semantic.length > 0) out.push(...semanticTable(semantic, opts));
 
   out.push('<details><summary>Freshness per file</summary>', '');
   for (const f of report.files) {
-    const pass = f.results.filter((r) => r.status === 'pass').length;
-    const fail = f.results.filter((r) => r.status === 'fail').length;
+    const { pass, fail } = verified(f.results);
     out.push(`- \`${f.file}\`: ${percent(f.freshness)} (${pass}/${pass + fail})`);
   }
   out.push('', '</details>', '', `<sub>ctxtruth ${report.tool.version}</sub>`);

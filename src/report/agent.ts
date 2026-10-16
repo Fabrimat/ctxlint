@@ -1,5 +1,5 @@
 import type { CheckResult, Finding, Report } from '../types.js';
-import { reportedResults } from './build.js';
+import { isSemantic, reportedResults } from './build.js';
 import { llmLine } from './llm.js';
 import type { FormatOptions } from './index.js';
 
@@ -20,6 +20,31 @@ function findingLine(r: CheckResult, compared: boolean): string {
   return `${tag}${f.file}:${f.line}:${f.col} [${f.severity} ${f.checkId}] ${f.message}${action(f, r.claim.value)}`;
 }
 
+/** The quote and explanation of a semantic finding: its message without the prefix. */
+export const driftText = (f: Finding): string => f.message.replace(/^Possible drift: /, '');
+
+/** A proposed fix on one line, newlines shown as ⏎. */
+export const fixText = (fix: NonNullable<Finding['proposedFix']>): string =>
+  `replace lines ${fix.startLine}-${fix.endLine} with: ${fix.replacement.replace(/\r?\n/g, '⏎')}`;
+
+/** Model ids of `findings`, for the semantic headers. */
+export const modelsOf = (findings: readonly Finding[]): string =>
+  [...new Set(findings.flatMap((f) => (f.model === undefined ? [] : [f.model])))].join(', ') ||
+  'a model';
+
+function semanticLines(findings: Finding[]): string[] {
+  const out = [
+    `${plural(findings.length, 'possible semantic drift')}, judged by ${modelsOf(findings)}, not verified; read the code before editing.`,
+  ];
+  for (const f of findings) {
+    out.push(`${f.file}:${f.line} [${f.severity} semantic] ${driftText(f)}`);
+    if (f.proposedFix) {
+      out.push(`  → proposed (${f.model ?? 'model'}, unverified): ${fixText(f.proposedFix)}`);
+    }
+  }
+  return out;
+}
+
 function unknownLine(r: CheckResult): string {
   const { file, line, kind, value } = r.claim;
   return `${file}:${line} [unknown ${kind}] ${value}: ${r.reason ?? 'could not be verified'}`;
@@ -27,13 +52,18 @@ function unknownLine(r: CheckResult): string {
 
 /** Terse output for coding agents that run the CLI themselves. */
 export function formatAgent(report: Report, opts: FormatOptions): string {
-  const results = reportedResults(report);
+  const reported = reportedResults(report);
+  const results = reported.filter((r) => !isSemantic(r));
   const findings = results.flatMap((r) => (r.finding ? [r.finding] : []));
+  const semantic = reported.filter(isSemantic).flatMap((r) => (r.finding ? [r.finding] : []));
   const out: string[] = [];
 
   if (findings.length === 0) {
+    const verified = `ctxtruth: no stale claims (${plural(report.summary.pass, 'claim')} verified).`;
     out.push(
-      `ctxtruth: no stale claims (${plural(report.summary.pass, 'claim')} verified). The docs checked are consistent with the code.`,
+      semantic.length === 0
+        ? `${verified} The docs checked are consistent with the code.`
+        : verified,
     );
   } else {
     const files = new Set(findings.map((f) => f.file)).size;
@@ -42,6 +72,7 @@ export function formatAgent(report: Report, opts: FormatOptions): string {
     );
     out.push(...results.map((r) => findingLine(r, report.comparison !== undefined)));
   }
+  if (semantic.length > 0) out.push(...semanticLines(semantic));
 
   if (opts.verbose) {
     const unknown = report.files
@@ -63,6 +94,9 @@ export function formatAgent(report: Report, opts: FormatOptions): string {
     out.push(
       `To fix: edit the docs at the positions above ${how}; re-run \`ctxtruth check\` to confirm.`,
     );
+  }
+  if (semantic.length > 0) {
+    out.push('For the possible semantic drifts: confirm against the code, then fix.');
   }
   if (report.llm) out.push(llmLine(report.llm));
   return `${out.join('\n')}\n`;

@@ -12,7 +12,8 @@ const DESCRIPTIONS: Record<BuiltinCheckId, string> = {
   symbols: 'Documented code symbol does not exist',
   snippets: 'Documented TypeScript snippet does not type-check',
   versions: 'Documented package version differs from the installed dependency',
-  semantic: 'Documentation section contradicts the code it describes (judged by a model)',
+  semantic:
+    'Documentation section may contradict the code it describes (model-judged, not verified)',
 };
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -64,6 +65,28 @@ export function formatSarif(report: Report, opts: FormatOptions): string {
                 },
               ],
               partialFingerprints: { 'ctxtruthFingerprint/v1': sha256(fingerprint(r)) },
+              ...(f.proposedFix && {
+                fixes: [
+                  {
+                    description: { text: `Proposed by ${f.model ?? 'a model'}, unverified` },
+                    artifactChanges: [
+                      {
+                        artifactLocation: { uri: f.file, uriBaseId: '%SRCROOT%' },
+                        replacements: [
+                          {
+                            // Whole lines: no columns, so the final line break is kept.
+                            deletedRegion: {
+                              startLine: f.proposedFix.startLine,
+                              endLine: f.proposedFix.endLine,
+                            },
+                            insertedContent: { text: f.proposedFix.replacement },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              }),
             },
           ];
         }),
