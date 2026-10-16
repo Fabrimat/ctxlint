@@ -50,35 +50,41 @@ See the [GitHub Action guide](docs/github-action.md) for permissions, inputs and
 
 ## Example
 
-This is the real output on the drift fixture used by the test suite, a small pnpm monorepo whose docs went stale:
+A real run on the drift fixture used by the test suite, a small pnpm monorepo whose docs went stale:
+
+![ctxtruth check output: 6 errors and 4 warnings across AGENTS.md and docs/guide.md](media/drift-run.svg)
+
+Every finding has a position (`line:col`), a severity, the check that produced it and, when one is obvious, a concrete suggestion. The exit code is 1 because there are errors; see [exit codes](#exit-codes).
+
+Coding agents get a compact format instead, selected automatically when one runs the command:
 
 ```text
-AGENTS.md  freshness 23% (3/13)
-  6:31   error    Path `src/utils/format.ts` does not exist (did you mean `src/utils/formatting.ts`?)           paths
-                  suggestion: src/utils/formatting.ts
-  7:33   error    Path `src/old/config.ts` does not exist (moved to `src/config.ts`?)                           paths
-                  suggestion: src/config.ts
-  16:10  error    Script `typecheck` is not defined in `package.json`                                           scripts
-  17:9   error    Script `buidl` is not defined in `package.json` (did you mean `build`?)                       scripts
-                  suggestion: build
-  18:6   warning  Script `dev` is not defined in `package.json` (it is defined in `packages/web/package.json`)  scripts
-  19:1   warning  Command `tsx` is not installed as a dependency                                                commands
-  31:31  warning  Symbol `formatTimeStamp` is not defined in the codebase (did you mean `formatTimestamp`?)     symbols
-                  suggestion: formatTimestamp
-  32:9   warning  `Config` has no member `reload`                                                               symbols
-  33:28  warning  Docs say `zod@3` but `package.json` requires `^4.1.0`                                         versions
-                  suggestion: zod@4
-  38:29  error    Snippet does not type-check: Expected 1 arguments, but got 2. (TS2554)                        snippets
-
-docs/guide.md  freshness 67% (2/3)
-  5:24  error  Path `../src/old/config.ts` does not exist (moved to `src/config.ts`?)  paths
-               suggestion: src/config.ts
-
-✖ 6 errors, 5 warnings · 24 claims · 10 verified · 3 unknown · freshness 48% · 698 ms
+$ ctxtruth check --format agent
+ctxtruth: 10 stale claims in 2 files. These facts were verified against the repository; trust them over the docs.
+AGENTS.md:6:31 [error paths] Path `src/utils/format.ts` does not exist (did you mean `src/utils/formatting.ts`?) → replace `src/utils/format.ts` with `src/utils/formatting.ts`
+AGENTS.md:17:9 [error scripts] Script `buidl` is not defined in `package.json` (did you mean `build`?) → replace script `buidl` with `build`
+…
 ```
 
-Every finding has a position (`line:col`), a severity, the check that produced it and, when one is obvious, a concrete suggestion.
-The exit code is 1 because there are errors; see [exit codes](#exit-codes).
+## Results on real repositories
+
+<!-- ctxtruth-disable -->
+
+ctxtruth was run with its default configuration on 26 popular open-source TypeScript repositories that ship an `AGENTS.md` or `CLAUDE.md`, including vercel/ai, prisma, supabase, cal.com, n8n, langchainjs, react-router, material-ui, storybook, vitest and zod. Every finding was checked by hand.
+
+| Repositories | Documents | Claims | Verified | Unknown | Findings | False positives |
+| -----------: | --------: | -----: | -------: | ------: | -------: | --------------: |
+|           26 |       796 | 14,052 |   10,945 |   3,097 |       10 |               0 |
+
+All 10 findings are real drift, 8 distinct problems. Three examples:
+
+- **langchainjs `AGENTS.md`** lists `@langchain/standard-tests` under `libs/langchain-standard-tests/`; the package lives in `internal/standard-tests/`.
+- **langchainjs `AGENTS.md`** tells agents to run `pnpm --filter @langchain/core lint:dpdm`, a script `@langchain/core` does not define.
+- **react-router API docs** import `unstable_createCallServer` and `unstable_getRSCStream` from `react-router`; both are exported only from `react-router/dom`.
+
+Getting there took one honest iteration: on zod, vitest and TanStack Query the first version reported 7,555 findings, almost all false. They came from documentation sites describing users' projects, site routes, type parameters, output lines in shell blocks and the like. Each class became a rule with tests, and documentation sites and historical records are now skipped by default (and reported as skipped). The [full study](bench/study/README.md) lists every repository, commit and finding. No issue or pull request was opened on any of them.
+
+<!-- ctxtruth-enable -->
 
 ## What it checks
 
@@ -290,8 +296,9 @@ Not run yet: the paid run needs approval.
 - **M3 (done):** GitHub Action, SARIF output, reporting only findings a pull request introduces, `--changed-only`.
 - **M4 (done):** history engine: `ctxtruth blame` to find the commit that made a claim stale, `ctxtruth history`, and the DriftBench dataset.
 - **M4.5 (done):** plugin API for custom checks, `--untrusted`, `ignoreRegions`, and versioned JSON Schemas.
-- **M5 (current):** opt-in semantic drift check (`--llm`) with cost tracking and a budget, proposed fixes as patches, and evals to measure it.
-- **M6:** a study of documentation drift on real repositories.
+- **M5 (done):** opt-in semantic drift check (`--llm`) with cost tracking and a budget, proposed fixes as patches, and evals to measure it.
+- **M6 (current):** a study on 26 real repositories with a zero-false-positive gate, and the npm and Marketplace release setup.
+- **Next:** the paid eval run, a larger study, and a standalone binary for environments without Node.
 
 ## Contributing
 
