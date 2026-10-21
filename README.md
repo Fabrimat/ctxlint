@@ -40,7 +40,7 @@ Run it on every pull request, with a comment that reports only the drift the pul
 <!-- ctxtruth-ignore -->
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0
 - uses: Fabrimat/ctxtruth@v0

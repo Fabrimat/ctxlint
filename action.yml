@@ -161,7 +161,7 @@ runs:
     - name: Upload SARIF
       if: always() && steps.run.outputs.sarif != ''
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ steps.run.outputs.sarif }}
         category: ctxtruth
